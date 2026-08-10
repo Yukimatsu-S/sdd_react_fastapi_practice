@@ -65,6 +65,31 @@ uv tool install specify-cli --from git+https://github.com/github/spec-kit.git@v0
 specify version
 ```
 
+期待出力は以下
+
+```shell
+specify version                     
+                                                  ███████╗██████╗ ███████╗ ██████╗██╗███████╗██╗   ██╗                                                   
+                                                  ██╔════╝██╔══██╗██╔════╝██╔════╝██║██╔════╝╚██╗ ██╔╝                                                   
+                                                  ███████╗██████╔╝█████╗  ██║     ██║█████╗   ╚████╔╝                                                    
+                                                  ╚════██║██╔═══╝ ██╔══╝  ██║     ██║██╔══╝    ╚██╔╝                                                     
+                                                  ███████║██║     ███████╗╚██████╗██║██║        ██║                                                      
+                                                  ╚══════╝╚═╝     ╚══════╝ ╚═════╝╚═╝╚═╝        ╚═╝                                                      
+                                                                                                                                                         
+                                                    GitHub Spec Kit - Spec-Driven Development Toolkit                                                    
+
+╭─────────────────────────────────────────────────────────────── Specify CLI Information ───────────────────────────────────────────────────────────────╮
+│                                                                                                                                                       │
+│     CLI Version    0.16.1                                                                                                                             │
+│                                                                                                                                                       │
+│          Python    3.12.13                                                                                                                            │
+│        Platform    Darwin                                                                                                                             │
+│    Architecture    arm64                                                                                                                              │
+│      OS Version    Darwin Kernel Version 25.5.0: Mon Apr 27 20:40:51 PDT 2026; root:xnu-12377.121.6~2/RELEASE_ARM64_T8112                             │
+│                                                                                                                                                       │
+╰───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+```
+
 以下のコマンドで Spec Kitを使うための周辺ツールがPCに入っているか確認する  
 具体的には、CLI型のAIコーディングエージェントや VS Code などが利用可能かをチェックする
 
@@ -85,6 +110,8 @@ specify init --here --integration copilot
 specify init . --integration copilot
 ```
 
+<details>
+
 **注意点**  
 GitHub Spec Kit と Git は別ものなので、初期化する際にすでにディレクトリにファイルがある場合は `git init` してから  
 Spec Kit を初期化すると安全
@@ -95,10 +122,83 @@ git add .
 git commit -m "docs: add initial learning notes"
 ```
 
-**他の初期化方法**
+**他の初期化方法**  
 新たにディレクトリを作成して、そこを Spec Kit 対応プロジェクトとして初期化する場合は以下のように指定して初期化する
 
 ```shell
 specify init my-project --integration copilot
 cd my-project
+```
+
+</details>
+
+choose script type は `sh` を選択する
+
+セットアップが完了すると以下のようなものが出力される
+
+```shell       
+                                                  ███████╗██████╗ ███████╗ ██████╗██╗███████╗██╗   ██╗                                                   
+                                                  ██╔════╝██╔══██╗██╔════╝██╔════╝██║██╔════╝╚██╗ ██╔╝                                                   
+                                                  ███████╗██████╔╝█████╗  ██║     ██║█████╗   ╚████╔╝                                                    
+                                                  ╚════██║██╔═══╝ ██╔══╝  ██║     ██║██╔══╝    ╚██╔╝                                                     
+                                                  ███████║██║     ███████╗╚██████╗██║██║        ██║                                                      
+                                                  ╚══════╝╚═╝     ╚══════╝ ╚═════╝╚═╝╚═╝        ╚═╝                                                      
+                                                                                                                                                         
+                                                    GitHub Spec Kit - Spec-Driven Development Toolkit                                                    
+
+Warning: Current directory is not empty (5 items)
+Template files will be merged with existing content and may overwrite existing files. Do you want to continue? [y/N]: y
+╭───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│                                                                                                                                                       │
+│  Specify Project Setup                                                                                                                                │
+│                                                                                                                                                       │
+│  Project         sdd_react_fastapi_practice                                                                                                           │
+│  Working Path    /Users/yukimatsusugawara/project_rich/sdd_react_fastapi_practice                                                                     │
+│                                                                                                                                                       │
+╰───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+Selected coding agent integration: copilot
+Selected script type: sh
+Initialize Specify Project
+├── ● Check required tools (ok)
+├── ● Select coding agent integration (copilot)
+├── ● Select script type (sh)
+├── ● Install integration (GitHub Copilot)
+├── ● Install shared infrastructure (scripts (sh) + templates)
+├── ● Ensure scripts executable (5 updated)
+├── ● Constitution setup (copied from template)
+├── ● Install bundled workflow (speckit installed)
+└── ● Finalize (project ready)
+
+Project ready.
+
+╭──────────────────────────────────────────────────────────────── Agent Folder Security ────────────────────────────────────────────────────────────────╮
+│                                                                                                                                                       │
+│  Some agents may store credentials, auth tokens, or other identifying and private artifacts in the agent folder within your project.                  │
+│  Consider adding .github/ (or parts of it) to .gitignore to prevent accidental credential leakage.                                                    │
+│                                                                                                                                                       │
+╰───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+╭───────────────────────────────────────────────────────────────────── Next Steps ──────────────────────────────────────────────────────────────────────╮
+│                                                                                                                                                       │
+│  1. You're already in the project directory!                                                                                                          │
+│  2. Start using skills with your coding agent:                                                                                                        │
+│     2.1 /speckit-constitution - Establish project principles                                                                                          │
+│     2.2 /speckit-specify - Create baseline specification                                                                                              │
+│     2.3 /speckit-plan - Create implementation plan                                                                                                    │
+│     2.4 /speckit-tasks - Generate actionable tasks                                                                                                    │
+│     2.5 /speckit-implement - Execute implementation                                                                                                   │
+│     2.6 /speckit-converge - Assess the codebase and append remaining work as tasks                                                                    │
+│                                                                                                                                                       │
+╰───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+╭───────────────────────────────────────────────────────────────── Enhancement Skills ──────────────────────────────────────────────────────────────────╮
+│                                                                                                                                                       │
+│  Optional skills that you can use for your specs (improve quality & confidence)                                                                       │
+│                                                                                                                                                       │
+│  ○ /speckit-clarify (optional) - Ask structured questions to de-risk ambiguous areas before planning (run before /speckit-plan if used)               │
+│  ○ /speckit-analyze (optional) - Cross-artifact consistency & alignment report (after /speckit-tasks, before /speckit-implement)                      │
+│  ○ /speckit-checklist (optional) - Generate quality checklists to validate requirements completeness, clarity, and consistency (after /speckit-plan)  │
+│                                                                                                                                                       │
+╰───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
