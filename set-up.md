@@ -72,7 +72,7 @@ specify version
 specify check
 ```
 
-プロジェクトのルートディレクトリに移動して以下のコマンドを実行することで
+プロジェクトのルートディレクトリに移動して以下のコマンドを実行することで  
 Spec Kit対応プロジェクトとして初期化する
 
 ```shell
@@ -83,4 +83,22 @@ specify init --here --integration copilot
 
 ```shell
 specify init . --integration copilot
+```
+
+**注意点**  
+GitHub Spec Kit と Git は別ものなので、初期化する際にすでにディレクトリにファイルがある場合は `git init` してから  
+Spec Kit を初期化すると安全
+
+```shell
+git init
+git add .
+git commit -m "docs: add initial learning notes"
+```
+
+**他の初期化方法**
+新たにディレクトリを作成して、そこを Spec Kit 対応プロジェクトとして初期化する場合は以下のように指定して初期化する
+
+```shell
+specify init my-project --integration copilot
+cd my-project
 ```
