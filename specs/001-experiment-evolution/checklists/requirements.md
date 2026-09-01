@@ -31,4 +31,4 @@
 
 ## Notes
 
-- Validated on 2026-09-01. All 16 checks passed; no unresolved clarification markers remain.
+- Re-validated on 2026-09-01 after removing duplicate clarifications, adding an acceptance scenario for unlinking a parent Run, and removing the success criterion whose evaluation method was undefined. All 16 checks passed; no unresolved clarification markers remain.
