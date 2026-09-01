@@ -202,3 +202,42 @@ Project ready.
 │                                                                                                                                                       │
 ╰───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
+
+# 4. FastAPI のセットアップ
+
+今回 Python の依存関係を管理するディレクトリは `/backend` のみのため  
+`/backend` で uv を初期化する
+
+```shell
+mkdir backend
+cd backend
+
+uv init --bare
+uv add "fastapi[standard]"
+```
+
+# 5. ここまでの環境の整理
+
+以下のような構成となっている
+
+```txt
+Mac
+│
+├─ uv
+│
+├─ uv管理Python 3.12
+│
+├─ specify-cli
+│
+└─ SDDプロジェクト
+    │
+    ├─ .specify/
+    ├─ .github/
+    │
+    └─ backend/
+        ├─ pyproject.toml
+        ├─ uv.lock
+        ├─ .venv/
+        │   └─ FastAPI
+        └─ main.py
+```
