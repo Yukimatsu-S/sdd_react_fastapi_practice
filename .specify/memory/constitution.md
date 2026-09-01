@@ -1,10 +1,10 @@
 <!--
 Sync Impact Report
-Version change: 1.0.0 -> 1.1.0
-Modified principles: I. Spec-Driven Delivery; II. Dual-Stack Contract Boundaries; III. Reproducible Tooling; IV. Test-First Verification; V. Simplicity and Traceability
-Added sections: Additional Constraints; Development Workflow (expanded with security, API contract, observability, and review clauses)
+Version change: 0.0.0 -> 1.0.0
+Modified principles: I. Spec-Driven Delivery; II. Dual-Stack Contract Boundaries; III. Reproducible Tooling; IV. Test-First Verification; V. Simplicity and Traceability; VI. Readability-First Implementation; VII. Dependency Reduction and Loose Coupling
+Added sections: Additional Constraints; Development Workflow
 Removed sections: none
-Deferred items: TODO(RATIFICATION_DATE): official adoption date to be confirmed before final ratification
+Deferred items: none
 -->
 
 # sdd_react_fastapi_practice Constitution
@@ -75,4 +75,4 @@ PR や変更は、元となる要件やタスクに紐づいている必要が�
 
 重要な変更には必ず適合性レビューを行う。もし本憲章と矛盾する実装や方針があれば、その矛盾は文書で解消または正当化され、関連する仕様や作業記録に反映されてから完了とみなす。
 
-**Version**: 1.1.0 | **Ratified**: 2026-09-01 | **Last Amended**: 2026-09-01
+**Version**: 1.0.0 | **Ratified**: 2026-09-01 | **Last Amended**: 2026-09-01
