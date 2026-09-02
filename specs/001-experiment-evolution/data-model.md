@@ -31,6 +31,8 @@ Indexes: `UNIQUE(result_run_id)`, `INDEX(parent_run_id)`, and `INDEX(created_at 
 | `imported_at` | datetime(6) | UTC import time |
 | `raw_metadata` | json nullable | Retained unmodeled fields for diagnosis |
 
+Each MLflow Run ID has exactly one snapshot. A snapshot and its child Parameters, metric observations, and dataset inputs are inserted only on the first import and are never updated or deleted by application code. Later associations to the same Run ID reuse the existing snapshot.
+
 ### `run_parameter`
 
 `run_id` (FK), `name`, `value`; primary key `(run_id, name)`. Values remain strings as supplied by MLflow. This is the source for parameter differences.
@@ -58,7 +60,7 @@ History is inserted whenever a user edit changes a supported field, including Ru
 
 ## Mutation validation
 
-1. Validate a selected MLflow Run and create/update its snapshot before association.
+1. For each selected Run ID, reuse its saved snapshot when present. When absent, retrieve and validate the MLflow Run and insert a new immutable snapshot before association. Never overwrite an existing snapshot.
 2. In one transaction, lock the target experiment row and validate non-blank `purpose` and `hypothesis`.
 3. Reject equal non-null parent and result Run IDs.
 4. Let `UNIQUE(result_run_id)` reject a result Run claimed by another experiment; map the database conflict to API `409`.

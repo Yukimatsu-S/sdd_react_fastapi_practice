@@ -1,6 +1,6 @@
 # Implementation Plan: ML Experiment Evolution Manager Initial MVP
 
-**Branch**: `001-experiment-evolution` | **Date**: 2026-09-02 | **Spec**: [spec.md](spec.md)
+**Branch**: `chore/create-plan` | **Date**: 2026-09-02 | **Spec**: [spec.md](spec.md)
 
 **Input**: Feature specification from `specs/001-experiment-evolution/spec.md`
 
@@ -8,7 +8,7 @@
 
 機械学習開発者が実験の目的、仮説、手動の変更内容、MLflow Run の結果、差分、および派生関係を登録・確認する Web アプリケーションを構築する。React は入力、一覧・詳細・差分・Lineage の表示を担い、FastAPI は HTTP/JSON API、入力検証、Run 取得、履歴記録、Lineage 整合性を担う。MySQL は実験、現在の Run 紐付け、変更履歴、MLflow から取得した不変スナップショットを保存する。MLflow は外部で実行された学習の Run 情報を提供する参照専用の外部システムであり、本製品は学習を開始・停止・再実行しない。
 
-Run の紐付け時に FastAPI が MLflow から Run、Parameters、各 metric の時系列、dataset input を取得し、同一トランザクションでスナップショットと紐付けを保存する。現在の全 `parent_run_id -> result_run_id` 辺を検査して循環を拒否し、MySQL の一意制約で結果 Run の重複利用を防止する。比較は保存済みスナップショットだけで算出し、Parameters はキー単位で追加・変更・削除、accuracy は各履歴の最大値の差分、dataset は識別項目ごとの一致・相違として返す。
+Run の紐付け時、保存済みスナップショットがなければ FastAPI が MLflow から Run、Parameters、各 metric の時系列、dataset input を取得し、同一トランザクションでスナップショットと紐付けを保存する。保存済みスナップショットがあれば MLflow から再取得せず、その不変スナップショットを再利用する。現在の全 `parent_run_id -> result_run_id` 辺を検査して循環を拒否し、MySQL の一意制約で結果 Run の重複利用を防止する。比較は保存済みスナップショットだけで算出し、Parameters はキー単位で追加・変更・削除、accuracy は各履歴の最大値の差分、dataset は識別項目ごとの一致・相違として返す。
 
 ## Technical Context
 

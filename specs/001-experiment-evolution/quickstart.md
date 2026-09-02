@@ -21,7 +21,7 @@ Before implementation, these commands are expected to become the reproducible pr
 3. **Link updates**: Change and then unlink a parent Run; change and then unlink a result Run. Expect one ordered history item for each changed link. Verify experiments that already reference the former Run do not change.
 4. **Comparison**: For linked Runs, verify parameter additions/changes/removals. With multiple `accuracy` samples, verify the API uses each maximum and reports `$resultMax - parentMax$`. Confirm missing parent, result, metric, or dataset produces an explicit unavailable state; no other metric gets an automatic best value or delta.
 5. **Lineage**: Create a branched, multi-generation lineage. Verify ancestor and descendant order and that a parent Run not owned as an application result appears as an external root.
-6. **MLflow failure boundary**: Make the MLflow gateway time out or return an unreadable selected Run. Expect the attach/update API to return `502` with a trace ID, leave existing experiment links untouched, and allow saved details/lineage to continue reading from MySQL.
+6. **MLflow failure boundary and snapshot reuse**: Make the MLflow gateway time out or return an unreadable selected Run that has no saved snapshot. Expect the attach/update API to return `502` with a trace ID, leave existing experiment links untouched, and allow saved details/lineage to continue reading from MySQL. Then associate a Run that already has a saved snapshot and confirm the operation reuses local data without calling MLflow or overwriting the snapshot.
 
 ## Automated verification
 
