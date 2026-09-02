@@ -14,11 +14,11 @@ Run の紐付け時、保存済みスナップショットがなければ FastAP
 
 **Language/Version**: Python 3.12+ (backend, existing `pyproject.toml`), TypeScript (React; version finalized when frontend is initialized)
 
-**Primary Dependencies**: FastAPI, SQLAlchemy 2.x, Alembic, MLflow Python client, Pydantic v2; React, Vite, npm, React Router, TanStack Query, Vitest, Playwright
+**Primary Dependencies**: FastAPI, Pydantic v2, SQLAlchemy 2.x, PyMySQL, Alembic, MLflow Python client; React, TypeScript, Vite, npm, React Router, browser `fetch`; Vitest, React Testing Library, Playwright (one critical flow after integration)
 
 **Storage**: MySQL 8.0+ for application data and immutable MLflow Run snapshots; MLflow Tracking Server is an external read-only source
 
-**Testing**: pytest + httpx/TestClient + Testcontainers MySQL for backend unit/integration/contract tests; Vitest + React Testing Library for UI; Playwright for critical end-to-end flows
+**Testing**: pytest + FastAPI TestClient against a dedicated MySQL test database for backend unit/integration/contract tests; Vitest + React Testing Library when frontend implementation starts; Playwright for one critical end-to-end flow after frontend/backend integration
 
 **Target Platform**: Modern desktop browser for the single-team MVP; Linux-compatible FastAPI service; MySQL 8.0+ and reachable MLflow Tracking Server
 
@@ -26,7 +26,7 @@ Run の紐付け時、保存済みスナップショットがなければ FastAP
 
 **Performance Goals**: Experiment list and saved-detail reads respond within 500 ms p95 under an MVP dataset of 1,000 experiments; a lineage response for 100 linked experiments responds within 1 s excluding MLflow import; UI enables the SC-001 to SC-003 workflows within their specified times
 
-**Constraints**: `uv` manages backend dependencies and `npm` manages frontend dependencies; browser never accesses MLflow or MySQL directly; no authentication, delete/archive, graphical lineage, or learning-job control; attach/update fails atomically when MLflow retrieval or integrity validation fails; MLflow snapshots are not silently refreshed
+**Constraints**: `uv` manages backend dependencies and `npm` manages frontend dependencies; backend database access uses synchronous SQLAlchemy with PyMySQL and FastAPI path operations that perform blocking I/O use normal `def`; React calls FastAPI through a hand-written typed wrapper around browser `fetch`; no TanStack Query, Testcontainers, asynchronous SQLAlchemy, or generated OpenAPI client in the initial MVP; browser never accesses MLflow or MySQL directly; no authentication, delete/archive, graphical lineage, or learning-job control; attach/update fails atomically when MLflow retrieval or integrity validation fails; MLflow snapshots are not silently refreshed
 
 **Scale/Scope**: One React application, one FastAPI service, one MySQL schema, one MLflow integration; CRUD is limited to create/read/update for experiments and Run associations
 
@@ -77,7 +77,7 @@ backend/
 
 frontend/
 ├── src/
-│   ├── api/                 # Typed HTTP client generated or checked from OpenAPI
+│   ├── api/                 # Hand-written typed HTTP client using browser fetch
 │   ├── components/
 │   ├── features/experiments/
 │   ├── pages/

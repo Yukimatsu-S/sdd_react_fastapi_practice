@@ -6,6 +6,12 @@
 - **Rationale**: `Run.data.params` is the complete MLflow parameter map, while `Run.data.metrics` only exposes the latest metric values. Full accuracy history is required to select the maximum correctly. Dataset inputs retain MLflow dataset metadata such as name, digest, source and schema; this is more reliable than an application-specific tag convention.
 - **Alternatives considered**: Reading only `Run.data.metrics` was rejected because it cannot meet the multiple-accuracy requirement. Browser-to-MLflow access was rejected because it leaks external configuration and bypasses API validation.
 
+## Backend execution model
+
+- **Decision**: Use synchronous SQLAlchemy 2.x with PyMySQL and the synchronous MLflow Python client. FastAPI path operations and dependencies that perform these blocking I/O calls use normal `def`, with one SQLAlchemy Session per request. Complete any required MLflow retrieval before opening the database transaction that persists a new snapshot and association.
+- **Rationale**: The initial MVP is a low-concurrency, single-team learning application. A synchronous request flow makes API, service, database, commit, and rollback behavior easier to trace while still allowing FastAPI to execute blocking path operations in its thread pool. Keeping external MLflow waits outside the database transaction avoids holding database connections and locks during network I/O.
+- **Alternatives considered**: Asynchronous SQLAlchemy and an async MySQL driver were deferred because they add coroutine, async session, driver, and async-test concepts before the core HTTP and transaction flow is understood. Reconsider asynchronous data access only if measured concurrency or latency shows that the synchronous thread and connection pools are a bottleneck.
+
 ## Snapshot and service boundary
 
 - **Decision**: Import and persist a point-in-time Run snapshot only when a user selects a Run that has no saved snapshot. If the Run already has a saved snapshot, reuse it without calling MLflow again or overwriting it. For a first import, complete MLflow retrieval before committing the new snapshot and experiment association in one database transaction. Details, differences, and lineage read local data only. Automatic and manual snapshot refresh are out of scope for the initial MVP.
@@ -32,12 +38,12 @@
 
 ## API and frontend state
 
-- **Decision**: Version FastAPI routes under `/api/v1`. React uses a typed API client and TanStack Query for request state, cache invalidation after mutations, and display of explicit `409` integrity violations and `502` MLflow-unavailable errors.
-- **Rationale**: The HTTP/OpenAPI contract is the sole cross-stack boundary. The frontend remains responsible for usability and local form feedback; FastAPI remains the authority for constraints.
-- **Alternatives considered**: Duplicating lineage checks in React is rejected because clients can be stale and constraints must hold for all callers.
+- **Decision**: Version FastAPI routes under `/api/v1`. React uses React Router for list, create, and detail pages and a hand-written typed wrapper around browser `fetch` for API calls. Each feature explicitly manages loading, success, empty, and error states and refreshes affected data after mutations. The frontend displays `409` integrity violations and `502` MLflow-unavailable errors returned by FastAPI.
+- **Rationale**: The HTTP/OpenAPI contract is the sole cross-stack boundary. Using browser `fetch` keeps the request and response flow visible during learning, while the small typed wrapper prevents duplicated URL and error-handling code. The frontend remains responsible for usability and local form feedback; FastAPI remains the authority for constraints.
+- **Alternatives considered**: TanStack Query was deferred because its caching and server-state abstractions would hide the initial request-state flow and add a library before the MVP needs advanced cache behavior. Generated OpenAPI clients were deferred so the first API types and calls remain inspectable. Duplicating lineage checks in React was rejected because clients can be stale and constraints must hold for all callers.
 
 ## Testing
 
-- **Decision**: Test pure diff and graph functions with pytest unit tests; test MySQL constraints, migrations, transactions, and FastAPI responses with integration tests; mock the MLflow gateway for success, incomplete data, and failures; validate OpenAPI against API responses; test React loading/error/empty/constraint states with Vitest; cover create, update, conflict, diff, and lineage journeys with Playwright.
+- **Decision**: Test pure diff and graph functions with pytest unit tests; test MySQL constraints, migrations, transactions, and FastAPI responses against a dedicated MySQL test database; mock the MLflow gateway for success, incomplete data, and failures; validate OpenAPI against API responses; introduce Vitest and React Testing Library with the frontend to test loading, error, empty, and constraint states; add one Playwright end-to-end test for the critical create-and-attach flow after frontend/backend integration.
 - **Rationale**: The highest-risk rules are graph integrity and external-service failure, both of which need verification below the browser and across the HTTP boundary.
-- **Alternatives considered**: Manual-only validation is rejected by the constitution and cannot reliably cover concurrent ownership or all cycle shapes.
+- **Alternatives considered**: Testcontainers was deferred because automatic container lifecycle management adds another abstraction before database integration testing is understood; the test database connection is supplied explicitly instead. Playwright is used for the critical end-to-end user flow and representative validation errors, while exhaustive validation cases are covered by faster backend integration and frontend component tests to avoid duplication. Manual-only validation is rejected by the constitution and cannot reliably cover concurrent ownership or all cycle shapes.

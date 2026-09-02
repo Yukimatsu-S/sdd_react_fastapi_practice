@@ -25,8 +25,8 @@ Before implementation, these commands are expected to become the reproducible pr
 
 ## Automated verification
 
-- Backend: `uv run pytest` for unit, integration, MLflow-gateway mock, migration, and OpenAPI contract suites.
+- Backend: `uv run pytest` for unit, integration, MLflow-gateway mock, migration, and OpenAPI contract suites. Integration tests use an explicitly configured dedicated MySQL test database; Testcontainers is not required.
 - Frontend: `npm test` for form, request state, error, and comparison/lineage display tests.
-- End-to-end: `npm run test:e2e` with FastAPI, MySQL, and MLflow test fixtures running. It must cover the six validation scenarios above and preserve screenshots/traces for failures.
+- End-to-end: After frontend/backend integration, `npm run test:e2e` runs one Playwright test for the critical create-and-attach journey with FastAPI, MySQL, and MLflow test fixtures. The remaining validation scenarios are covered by backend integration and frontend component tests. Preserve screenshots/traces for end-to-end failures.
 
 See [data-model.md](data-model.md) for persistence and integrity rules, and [contracts/openapi.yaml](contracts/openapi.yaml) for HTTP responses and error semantics.
