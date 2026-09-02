@@ -1,50 +1,78 @@
-# [PROJECT_NAME] Constitution
-<!-- Example: Spec Constitution, TaskFlow Constitution, etc. -->
+<!--
+Sync Impact Report
+Version change: 0.0.0 -> 1.0.0
+Modified principles: I. Spec-Driven Delivery; II. Dual-Stack Contract Boundaries; III. Reproducible Tooling; IV. Test-First Verification; V. Simplicity and Traceability; VI. Readability-First Implementation; VII. Dependency Reduction and Loose Coupling
+Added sections: Additional Constraints; Development Workflow
+Removed sections: none
+Deferred items: none
+-->
+
+# sdd_react_fastapi_practice Constitution
 
 ## Core Principles
 
-### [PRINCIPLE_1_NAME]
-<!-- Example: I. Library-First -->
-[PRINCIPLE_1_DESCRIPTION]
-<!-- Example: Every feature starts as a standalone library; Libraries must be self-contained, independently testable, documented; Clear purpose required - no organizational-only libraries -->
+### I. 仕様駆動での開発
+すべての作業は、実現したい成果、要件、受け入れ基準が明確になってから開始しなければならない。
+本プロジェクトは Spec Kit の流れに従う: 仕様定義、設計、タスク化、実装、レビュー。要件やタスクに紐づかない変更は、このリポジトリでは有効な作業として扱わない。
 
-### [PRINCIPLE_2_NAME]
-<!-- Example: II. CLI Interface -->
-[PRINCIPLE_2_DESCRIPTION]
-<!-- Example: Every library exposes functionality via CLI; Text in/out protocol: stdin/args → stdout, errors → stderr; Support JSON + human-readable formats -->
+製品の振る舞いを変更する場合、コードの修正より先に Specification を更新しなければならない。仕様が未更新のまま実装を進めることは許容しない。変更の意図、影響範囲、受け入れ条件は、実装前に明文化する。
 
-### [PRINCIPLE_3_NAME]
-<!-- Example: III. Test-First (NON-NEGOTIABLE) -->
-[PRINCIPLE_3_DESCRIPTION]
-<!-- Example: TDD mandatory: Tests written → User approved → Tests fail → Then implement; Red-Green-Refactor cycle strictly enforced -->
+### II. フロントエンドとバックエンドの責務分離
+React フロントエンドと FastAPI バックエンドは、それぞれ独立した責務を持ち、共有する契約を明示しなければならない。
+フロントエンドは文書化された API 契約を利用し、バックエンドはデータ検証、ビジネスロジック、レスポンス整合性を担う。API 契約を破る変更は、明示的な変更管理と両層の調整を行わなければならない。
 
-### [PRINCIPLE_4_NAME]
-<!-- Example: IV. Integration Testing -->
-[PRINCIPLE_4_DESCRIPTION]
-<!-- Example: Focus areas requiring integration tests: New library contract tests, Contract changes, Inter-service communication, Shared schemas -->
+### III. 再現可能な環境管理
+本プロジェクトは、層ごとに適したツールを使って依存関係を管理しなければならない。フロントエンドは npm、バックエンドの Python 環境は uv を使用する。
+依存関係はプロジェクト内の設定とロックファイルで管理し、手作業で環境を改変する行為は許容しない。再現性のあるセットアップが前提である。
 
-### [PRINCIPLE_5_NAME]
-<!-- Example: V. Observability, VI. Versioning & Breaking Changes, VII. Simplicity -->
-[PRINCIPLE_5_DESCRIPTION]
-<!-- Example: Text I/O ensures debuggability; Structured logging required; Or: MAJOR.MINOR.BUILD format; Or: Start simple, YAGNI principles -->
+### IV. テストファーストの検証
+新しい振る舞いは、実装を完了する前に失敗する確認や検証手順を明示しなければならない。
+API、UI、共有ロジックの変更は、最小単位で実行可能な自動または手動の検証を行い、検証の証跡がない変更はマージ対象とみなさない。
 
-## [SECTION_2_NAME]
-<!-- Example: Additional Constraints, Security Requirements, Performance Standards, etc. -->
+### V. シンプルさと追跡可能性
+要件を満たすために必要最小限の設計を優先し、次の担当者が理解しやすい構成を選ばなければならない。
+複雑さ、重複、説明のない短絡は、書面で正当化され、対象の要件や課題に紐づいていない限り許容しない。
 
-[SECTION_2_CONTENT]
-<!-- Example: Technology stack requirements, compliance standards, deployment policies, etc. -->
+### VI. 可読性重視の実装
+実装は、人間がレビューしやすいように、読み手が最小の認知負荷で理解できる構造を優先しなければならない。
+関数は一つの責務に集中させ、長大な処理を分割し、意味のある命名を用いる。単一の関数に複数の役割を押し込む実装は、理解しにくいと判断される。
 
-## [SECTION_3_NAME]
-<!-- Example: Development Workflow, Review Process, Quality Gates, etc. -->
+### VII. 依存の低減と疎結合
+モジュールや関数は、必要最小限の依存を持つ形に整理し、外部状態に過度に依存しない設計を優先しなければならない。
+グローバル変数や暗黙の依存を増やす実装、過剰な横断的結合は、レビュー性と保守性を低下させるため慎重に扱わなければならない。内部処理は入力と出力が明確になるように設計する。
 
-[SECTION_3_CONTENT]
-<!-- Example: Code review requirements, testing gates, deployment approval process, etc. -->
+## Additional Constraints
+
+本リポジトリは、フロントエンドとバックエンドの責務を明確に分離した学習プロジェクトとして設計する。
+フロントエンドはユーザー体験とクライアント側の振る舞いに集中し、バックエンドはサービスロジック、スキーマ、API 振る舞いに集中する。共有する知見やメモは、学習目的を支えつつ、システム境界を曖昧にしてはならない。
+
+秘密情報、資格情報、環境固有の設定値はコミットしてはならない。セットアップ手順は、uv、npm、Spec Kit を使った実際の運用に基づき、他の開発者が再現できる形で明記しなければならない。
+
+API 契約の変更は、UI 側の修正だけで完結させてはならない。破壊的変更が発生する場合は、変更理由、影響範囲、互換性の扱い、更新手順を明文化し、関連する実装とドキュメントを同時に更新する。
+
+運用上の失敗や障害は、原因を特定できるようにログ、エラー情報、追跡可能な識別子を整備しなければならない。デバッグしにくい実装は、説明責任を満たさないものとみなす。
+
+実装レビューでは、可読性・関数分割・依存の明確さを評価基準に含めなければならない。目的が不明瞭な長い関数、過度に結合された処理、読み手に推測を強いる命名は、改善または再設計の対象とする。
+
+## Development Workflow
+
+すべての作業は Spec Kit のライフサイクルに従わなければならない: 仕様定義、計画、タスク化、実装、レビュー。
+実装前に、関連する要件と受け入れ基準を明文化し、実装後には対象の検証手順と変更内容を記録しなければならない。
+
+Task は独立して確認できる大きさに分割しなければならない。単一の Task が複数の責務を抱えたり、完了判定が曖昧な状態で進行してはいけない。1 つの Task は、レビュー担当者が短時間で内容と影響範囲を把握できる単位にする。
+
+各 Task には完了条件と検証方法を明確に定義しなければならない。完了条件は、実際に達成したことが確認できる形で記述し、検証方法は実行手順または確認観点を含める。検証結果がない Task は未完了とみなす。
+
+PR や変更は、元となる要件やタスクに紐づいている必要がある。スコープが変わる場合は、実装を完了とみなす前に、仕様・計画・タスクの更新を行わなければならない。
+
+実装レビューでは、関数の役割、入力と出力、依存の範囲が伝わるようにコードを整理しなければならない。可読性の低い実装や複雑な処理は、説明責任のある再設計が必要である。
+
+セキュリティ上の懸念や機密情報が含まれる可能性のある変更は、レビュー前にその影響と対策を明示しなければならない。変更の妥当性は、技術的な正しさだけでなく、運用と保守のしやすさでも評価する。
 
 ## Governance
-<!-- Example: Constitution supersedes all other practices; Amendments require documentation, approval, migration plan -->
 
-[GOVERNANCE_RULES]
-<!-- Example: All PRs/reviews must verify compliance; Complexity must be justified; Use [GUIDANCE_FILE] for runtime development guidance -->
+この憲章は、個人的な慣例や暗黙の作法より優先し、リポジトリにおける意思決定を支配する。改定は、理由、影響範囲、移行方針またはフォローアップ作業を明確に記録し、仕様駆動、再現可能性、契約整合性を弱める変更は、採用前に明示的なレビューを受けなければならない。
 
-**Version**: [CONSTITUTION_VERSION] | **Ratified**: [RATIFICATION_DATE] | **Last Amended**: [LAST_AMENDED_DATE]
-<!-- Example: Version: 2.1.1 | Ratified: 2025-06-13 | Last Amended: 2025-07-16 -->
+重要な変更には必ず適合性レビューを行う。もし本憲章と矛盾する実装や方針があれば、その矛盾は文書で解消または正当化され、関連する仕様や作業記録に反映されてから完了とみなす。
+
+**Version**: 1.0.0 | **Ratified**: 2026-09-01 | **Last Amended**: 2026-09-01
