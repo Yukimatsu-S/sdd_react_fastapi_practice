@@ -72,9 +72,9 @@ components:
       required: [purpose, hypothesis]
       additionalProperties: false
       properties:
-        purpose: { type: string, minLength: 1 }
-        hypothesis: { type: string, minLength: 1 }
-        changeDescription: { type: [string, 'null'] }
+        purpose: { type: string, minLength: 1, pattern: '\S' }
+        hypothesis: { type: string, minLength: 1, pattern: '\S' }
+        changeDescription: { type: [string, 'null'], minLength: 1, pattern: '\S' }
         parentRunId: { type: [string, 'null'] }
         resultRunId: { type: [string, 'null'] }
     ExperimentPatch:
@@ -83,9 +83,9 @@ components:
       additionalProperties: false
       description: Fields omitted from PATCH are unchanged; explicit null unlinks a Run or clears changeDescription.
       properties:
-        purpose: { type: string, minLength: 1 }
-        hypothesis: { type: string, minLength: 1 }
-        changeDescription: { type: [string, 'null'] }
+        purpose: { type: string, minLength: 1, pattern: '\S' }
+        hypothesis: { type: string, minLength: 1, pattern: '\S' }
+        changeDescription: { type: [string, 'null'], minLength: 1, pattern: '\S' }
         parentRunId: { type: [string, 'null'] }
         resultRunId: { type: [string, 'null'] }
     RunSummary:

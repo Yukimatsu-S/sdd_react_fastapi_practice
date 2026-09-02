@@ -32,3 +32,4 @@
 ## Notes
 
 - Re-validated on 2026-09-01 after removing duplicate clarifications, adding an acceptance scenario for unlinking a parent Run, and removing the success criterion whose evaluation method was undefined. All 16 checks passed; no unresolved clarification markers remain.
+- Re-validated on 2026-09-02 after defining non-blank input behavior for purpose, hypothesis, and optional change descriptions. The clarification, acceptance scenario, edge case, functional requirements, API contract, and data model remain aligned; all 16 checks pass.

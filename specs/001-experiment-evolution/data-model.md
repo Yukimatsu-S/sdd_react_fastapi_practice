@@ -11,9 +11,9 @@
 | Field | Type | Rules |
 |---|---|---|
 | `id` | bigint PK | Application identifier |
-| `purpose` | text | Required, non-blank |
-| `hypothesis` | text | Required, non-blank |
-| `change_description` | text nullable | Manual intent/plan/qualitative description |
+| `purpose` | text | Required; must contain at least one non-whitespace character |
+| `hypothesis` | text | Required; must contain at least one non-whitespace character |
+| `change_description` | text nullable | Optional manual intent/plan/qualitative description; when present, must contain at least one non-whitespace character |
 | `parent_run_id` | varchar(64) nullable FK | References `run_snapshot.run_id`; zero or one parent |
 | `result_run_id` | varchar(64) nullable FK | References `run_snapshot.run_id`; zero or one result; `UNIQUE` |
 | `created_at`, `updated_at` | datetime(6) | UTC timestamps |
