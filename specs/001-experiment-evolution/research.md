@@ -1,0 +1,43 @@
+# Research: ML Experiment Evolution Manager
+
+## MLflow integration
+
+- **Decision**: Implement an `MlflowRunGateway` behind a backend interface using the MLflow Python client (MLflow 2.x+). List candidates with paginated `search_runs`, load a selected Run with `get_run`, load each metric history with `get_metric_history`, and load dataset inputs from `RunInputs.dataset_inputs` returned by `get_run` when the tracking server supports it. Preserve unavailable optional dataset fields as absent, not invented from tags.
+- **Rationale**: `Run.data.params` is the complete MLflow parameter map, while `Run.data.metrics` only exposes the latest metric values. Full accuracy history is required to select the maximum correctly. Dataset inputs retain MLflow dataset metadata such as name, digest, source and schema; this is more reliable than an application-specific tag convention.
+- **Alternatives considered**: Reading only `Run.data.metrics` was rejected because it cannot meet the multiple-accuracy requirement. Browser-to-MLflow access was rejected because it leaks external configuration and bypasses API validation.
+
+## Snapshot and service boundary
+
+- **Decision**: Import and persist a point-in-time Run snapshot only when a user selects a Run to attach as a parent or result. Every import replaces the snapshot only after MLflow retrieval completes; experiment association and snapshot persistence commit in one database transaction. Details, differences, and lineage read local data only.
+- **Rationale**: Historical review survives MLflow outages and preserves the observed values that motivated an experiment. Atomic attach prevents an experiment from pointing at a partially imported Run.
+- **Alternatives considered**: Live reads on every detail request were rejected because outages would make saved experiments unavailable and values could drift. Background polling was rejected because the feature does not require automatic refresh and it complicates audit meaning.
+
+## Data persistence
+
+- **Decision**: Use MySQL 8.0+ and SQLAlchemy 2.x with normalized `experiment`, `run_snapshot`, `run_parameter`, `metric_observation`, `dataset_input`, `experiment_change`, and append-only `experiment_history` tables. Save MLflow identifiers and values together with import timestamps.
+- **Rationale**: The relational schema makes result-Run ownership enforceable and preserves all metric samples without opaque JSON comparison logic. JSON payload columns retain unmodeled MLflow metadata for troubleshooting without becoming the comparison source.
+- **Alternatives considered**: A graph database is unnecessary for the expected bounded MVP graph. Storing only JSON prevents indexed uniqueness and simple, deterministic comparisons.
+
+## Result Run exclusivity and lineage validation
+
+- **Decision**: Place a nullable unique constraint on `experiment.result_run_id`. In the same transaction as every create/update, lock the edited experiment row, build the proposed set of edges where both parent and result Run exist, and run deterministic depth-first cycle detection by Run ID. The database unique constraint is the final protection against concurrent result-Run claims.
+- **Rationale**: An experiment represents an edge `$parentRun \rightarrow resultRun$`. A cycle exists exactly when the proposed directed Run graph cannot be topologically traversed. Building edges from current rows ensures a change or unlink affects only the selected experiment while validating the complete current graph.
+- **Alternatives considered**: Checking only direct parent/result equality misses multi-generation cycles. Cascading child updates violates FR-024.
+
+## Differences
+
+- **Decision**: Treat Parameters as string key/value maps. For the union of keys, return `added` when only the result contains a key, `removed` when only the parent contains it, and `changed` when both values differ. For metric key exactly `accuracy`, calculate each Run's `max(value)` from all stored observations and return `$resultMax - parentMax$`; return an explicit unavailable reason if either history is missing. Compare dataset identifier fields supplied by MLflow as equal, different, or unavailable.
+- **Rationale**: This directly implements FR-012, FR-014, FR-015, and FR-016 without inferring optimization direction for other metrics.
+- **Alternatives considered**: Comparing latest accuracy would produce the wrong result for non-monotonic training. General metric selection or min/max heuristics are explicitly out of scope.
+
+## API and frontend state
+
+- **Decision**: Version FastAPI routes under `/api/v1`. React uses a typed API client and TanStack Query for request state, cache invalidation after mutations, and display of explicit `409` integrity violations and `502` MLflow-unavailable errors.
+- **Rationale**: The HTTP/OpenAPI contract is the sole cross-stack boundary. The frontend remains responsible for usability and local form feedback; FastAPI remains the authority for constraints.
+- **Alternatives considered**: Duplicating lineage checks in React is rejected because clients can be stale and constraints must hold for all callers.
+
+## Testing
+
+- **Decision**: Test pure diff and graph functions with pytest unit tests; test MySQL constraints, migrations, transactions, and FastAPI responses with integration tests; mock the MLflow gateway for success, incomplete data, and failures; validate OpenAPI against API responses; test React loading/error/empty/constraint states with Vitest; cover create, update, conflict, diff, and lineage journeys with Playwright.
+- **Rationale**: The highest-risk rules are graph integrity and external-service failure, both of which need verification below the browser and across the HTTP boundary.
+- **Alternatives considered**: Manual-only validation is rejected by the constitution and cannot reliably cover concurrent ownership or all cycle shapes.

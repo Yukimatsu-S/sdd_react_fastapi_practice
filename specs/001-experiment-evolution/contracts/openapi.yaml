@@ -1,0 +1,146 @@
+openapi: 3.1.0
+info:
+  title: ML Experiment Evolution Manager API
+  version: 1.0.0
+  description: HTTP/JSON contract for the initial MVP. MLflow access is performed only by the server.
+servers:
+  - url: /api/v1
+paths:
+  /runs:
+    get:
+      summary: Search MLflow Runs available for selection
+      parameters:
+        - $ref: '#/components/parameters/Query'
+        - $ref: '#/components/parameters/PageToken'
+      responses:
+        '200': { $ref: '#/components/responses/RunPage' }
+        '502': { $ref: '#/components/responses/MlflowUnavailable' }
+  /experiments:
+    get:
+      summary: List stored experiments
+      responses:
+        '200': { $ref: '#/components/responses/ExperimentPage' }
+    post:
+      summary: Create an experiment and optionally attach validated Run links
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ExperimentMutation' } } }
+      responses:
+        '201': { $ref: '#/components/responses/ExperimentDetail' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '502': { $ref: '#/components/responses/MlflowUnavailable' }
+  /experiments/{experimentId}:
+    parameters: [ { $ref: '#/components/parameters/ExperimentId' } ]
+    get:
+      summary: Get experiment, imported Run snapshots, and ordered change history
+      responses:
+        '200': { $ref: '#/components/responses/ExperimentDetail' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      summary: Update editable fields and/or current Run links atomically
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ExperimentPatch' } } }
+      responses:
+        '200': { $ref: '#/components/responses/ExperimentDetail' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '502': { $ref: '#/components/responses/MlflowUnavailable' }
+  /experiments/{experimentId}/comparison:
+    parameters: [ { $ref: '#/components/parameters/ExperimentId' } ]
+    get:
+      summary: Compare current parent and result snapshots
+      responses:
+        '200': { $ref: '#/components/responses/Comparison' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /experiments/{experimentId}/lineage:
+    parameters: [ { $ref: '#/components/parameters/ExperimentId' } ]
+    get:
+      summary: Return ordered ancestors, selected experiment, and descendants
+      responses:
+        '200': { $ref: '#/components/responses/Lineage' }
+        '404': { $ref: '#/components/responses/NotFound' }
+components:
+  parameters:
+    ExperimentId: { name: experimentId, in: path, required: true, schema: { type: integer, minimum: 1 } }
+    Query: { name: query, in: query, schema: { type: string } }
+    PageToken: { name: pageToken, in: query, schema: { type: string } }
+  schemas:
+    ExperimentMutation:
+      type: object
+      required: [purpose, hypothesis]
+      properties:
+        purpose: { type: string, minLength: 1 }
+        hypothesis: { type: string, minLength: 1 }
+        changeDescription: { type: [string, 'null'] }
+        parentRunId: { type: [string, 'null'] }
+        resultRunId: { type: [string, 'null'] }
+    ExperimentPatch:
+      allOf:
+        - $ref: '#/components/schemas/ExperimentMutation'
+      description: Fields omitted from PATCH are unchanged; explicit null unlinks a Run or clears changeDescription.
+    RunSummary:
+      type: object
+      required: [runId, importedAt]
+      properties:
+        runId: { type: string }
+        status: { type: [string, 'null'] }
+        runName: { type: [string, 'null'] }
+        importedAt: { type: string, format: date-time }
+    ExperimentDetail:
+      type: object
+      required: [id, purpose, hypothesis, createdAt, updatedAt, history]
+      properties:
+        id: { type: integer }
+        purpose: { type: string }
+        hypothesis: { type: string }
+        changeDescription: { type: [string, 'null'] }
+        parentRun: { anyOf: [ { $ref: '#/components/schemas/RunSnapshot' }, { type: 'null' } ] }
+        resultRun: { anyOf: [ { $ref: '#/components/schemas/RunSnapshot' }, { type: 'null' } ] }
+        history: { type: array, items: { $ref: '#/components/schemas/HistoryEntry' } }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    RunSnapshot:
+      allOf: [ { $ref: '#/components/schemas/RunSummary' } ]
+      properties:
+        parameters: { type: object, additionalProperties: { type: string } }
+        metrics: { type: object, additionalProperties: { type: array, items: { $ref: '#/components/schemas/MetricObservation' } } }
+        datasets: { type: array, items: { type: object, additionalProperties: true } }
+    MetricObservation:
+      type: object
+      required: [value, timestamp]
+      properties: { value: { type: number }, step: { type: integer }, timestamp: { type: string, format: date-time } }
+    HistoryEntry:
+      type: object
+      required: [field, changedAt]
+      properties: { field: { type: string }, oldValue: { type: [string, 'null'] }, newValue: { type: [string, 'null'] }, changedAt: { type: string, format: date-time } }
+    Comparison:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string, enum: [available, unavailable] }
+        unavailableReason: { type: [string, 'null'] }
+        parameters: { type: object, additionalProperties: true }
+        accuracy: { type: object, additionalProperties: true }
+        datasets: { type: array, items: { type: object, additionalProperties: true } }
+    Lineage:
+      type: object
+      required: [ancestors, descendants]
+      properties:
+        ancestors: { type: array, items: { type: object, additionalProperties: true } }
+        descendants: { type: array, items: { type: object, additionalProperties: true } }
+    Error:
+      type: object
+      required: [code, message, traceId]
+      properties: { code: { type: string }, message: { type: string }, traceId: { type: string } }
+  responses:
+    RunPage: { description: Run candidates, content: { application/json: { schema: { type: object, additionalProperties: true } } } }
+    ExperimentPage: { description: Stored experiment page, content: { application/json: { schema: { type: object, additionalProperties: true } } } }
+    ExperimentDetail: { description: Experiment detail, content: { application/json: { schema: { $ref: '#/components/schemas/ExperimentDetail' } } } }
+    Comparison: { description: Snapshot comparison, content: { application/json: { schema: { $ref: '#/components/schemas/Comparison' } } } }
+    Lineage: { description: Ordered current lineage, content: { application/json: { schema: { $ref: '#/components/schemas/Lineage' } } } }
+    Conflict: { description: Duplicate result Run, same Run links, or cyclic lineage, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+    ValidationError: { description: Invalid request, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+    NotFound: { description: Missing experiment, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+    MlflowUnavailable: { description: MLflow was unavailable or returned incomplete selected Run data; no association was saved, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
