@@ -34,8 +34,11 @@ paths:
   /evolution-steps:
     get:
       summary: List stored Evolution Steps
+      parameters:
+        - $ref: '#/components/parameters/PageToken'
       responses:
         '200': { $ref: '#/components/responses/EvolutionStepList' }
+        '422': { $ref: '#/components/responses/ValidationError' }
     post:
       summary: Create an Evolution Step and optionally attach validated Run links
       requestBody:
@@ -90,7 +93,7 @@ components:
     PageToken:
       name: pageToken
       in: query
-      description: Opaque token returned by the previous page; reuse it only with the same filters.
+      description: Opaque token returned by the previous page; reuse it only with the same endpoint and filters.
       schema: { type: string, minLength: 1 }
   schemas:
     EvolutionStepCreate:
@@ -152,11 +155,13 @@ components:
     EvolutionStepList:
       type: object
       additionalProperties: false
-      required: [items]
+      required: [items, nextPageToken]
       properties:
         items:
           type: array
+          maxItems: 20
           items: { $ref: '#/components/schemas/EvolutionStepListItem' }
+        nextPageToken: { type: [string, 'null'] }
     EvolutionStepListItem:
       type: object
       additionalProperties: false
@@ -359,7 +364,7 @@ components:
     RunCandidatePage: { description: One token-paginated group of current MLflow Run candidates, content: { application/json: { schema: { $ref: '#/components/schemas/RunCandidatePage' } } } }
     RunSyncResult: { description: Current Run reference and optional finalized Snapshot, content: { application/json: { schema: { $ref: '#/components/schemas/RunSyncResult' } } } }
     BestStepMetrics: { description: Locally stored Metric values from the selected best-accuracy step; full histories are not returned, content: { application/json: { schema: { $ref: '#/components/schemas/BestStepMetrics' } } } }
-    EvolutionStepList: { description: Stored Evolution Steps with compact comparison summaries, content: { application/json: { schema: { $ref: '#/components/schemas/EvolutionStepList' } } } }
+    EvolutionStepList: { description: One token-paginated group of stored Evolution Steps with compact comparison summaries, content: { application/json: { schema: { $ref: '#/components/schemas/EvolutionStepList' } } } }
     EvolutionStepDetail: { description: Evolution Step detail using locally saved Run references and optional finalized Snapshots, content: { application/json: { schema: { $ref: '#/components/schemas/EvolutionStepDetail' } } } }
     Comparison: { description: Snapshot comparison, content: { application/json: { schema: { $ref: '#/components/schemas/Comparison' } } } }
     Lineage: { description: Ordered current lineage, content: { application/json: { schema: { $ref: '#/components/schemas/Lineage' } } } }
