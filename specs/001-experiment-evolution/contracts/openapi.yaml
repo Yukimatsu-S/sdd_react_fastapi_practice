@@ -24,6 +24,13 @@ paths:
         '200': { $ref: '#/components/responses/RunSyncResult' }
         '404': { $ref: '#/components/responses/NotFound' }
         '502': { $ref: '#/components/responses/MlflowUnavailable' }
+  /runs/{runId}/best-step-metrics:
+    parameters: [ { $ref: '#/components/parameters/RunId' } ]
+    get:
+      summary: Get locally stored Metrics recorded at the Run's best-accuracy step
+      responses:
+        '200': { $ref: '#/components/responses/BestStepMetrics' }
+        '404': { $ref: '#/components/responses/NotFound' }
   /evolution-steps:
     get:
       summary: List stored Evolution Steps
@@ -197,15 +204,17 @@ components:
     RunSnapshot:
       type: object
       additionalProperties: false
-      required: [runId, statusAtCapture, startedAt, endedAt, capturedAt, parameters, metrics, datasets]
+      required: [runId, statusAtCapture, startedAt, endedAt, bestAccuracy, bestAccuracyStep, bestAccuracyRecordedAt, capturedAt, parameters, datasets]
       properties:
         runId: { type: string }
         statusAtCapture: { type: string, enum: [FINISHED, FAILED, KILLED] }
         startedAt: { type: [string, 'null'], format: date-time }
         endedAt: { type: [string, 'null'], format: date-time }
+        bestAccuracy: { type: [number, 'null'], minimum: 0, maximum: 1 }
+        bestAccuracyStep: { type: [integer, 'null'], minimum: 0 }
+        bestAccuracyRecordedAt: { type: [string, 'null'], format: date-time }
         capturedAt: { type: string, format: date-time }
         parameters: { type: object, additionalProperties: { type: string } }
-        metrics: { type: object, additionalProperties: { type: array, items: { $ref: '#/components/schemas/MetricObservation' } } }
         datasets: { type: array, items: { $ref: '#/components/schemas/DatasetInputSnapshot' } }
     RunSyncResult:
       type: object
@@ -213,10 +222,27 @@ components:
       required: [run]
       properties:
         run: { $ref: '#/components/schemas/LinkedRun' }
-    MetricObservation:
+    BestStepMetrics:
       type: object
-      required: [value, timestamp]
-      properties: { value: { type: number }, step: { type: integer }, timestamp: { type: string, format: date-time } }
+      additionalProperties: false
+      required: [runId, status, unavailableReason, bestAccuracy, bestAccuracyStep, bestAccuracyRecordedAt, items]
+      properties:
+        runId: { type: string }
+        status: { type: string, enum: [available, unavailable] }
+        unavailableReason: { type: [string, 'null'] }
+        bestAccuracy: { type: [number, 'null'], minimum: 0, maximum: 1 }
+        bestAccuracyStep: { type: [integer, 'null'], minimum: 0 }
+        bestAccuracyRecordedAt: { type: [string, 'null'], format: date-time }
+        items: { type: array, items: { $ref: '#/components/schemas/BestStepMetric' } }
+    BestStepMetric:
+      type: object
+      additionalProperties: false
+      required: [name, value, step, recordedAt]
+      properties:
+        name: { type: string }
+        value: { type: number }
+        step: { type: integer, minimum: 0 }
+        recordedAt: { type: string, format: date-time }
     HistoryEntry:
       type: object
       required: [field, changedAt]
@@ -332,6 +358,7 @@ components:
   responses:
     RunCandidatePage: { description: One token-paginated group of current MLflow Run candidates, content: { application/json: { schema: { $ref: '#/components/schemas/RunCandidatePage' } } } }
     RunSyncResult: { description: Current Run reference and optional finalized Snapshot, content: { application/json: { schema: { $ref: '#/components/schemas/RunSyncResult' } } } }
+    BestStepMetrics: { description: Locally stored Metric values from the selected best-accuracy step; full histories are not returned, content: { application/json: { schema: { $ref: '#/components/schemas/BestStepMetrics' } } } }
     EvolutionStepList: { description: Stored Evolution Steps with compact comparison summaries, content: { application/json: { schema: { $ref: '#/components/schemas/EvolutionStepList' } } } }
     EvolutionStepDetail: { description: Evolution Step detail using locally saved Run references and optional finalized Snapshots, content: { application/json: { schema: { $ref: '#/components/schemas/EvolutionStepDetail' } } } }
     Comparison: { description: Snapshot comparison, content: { application/json: { schema: { $ref: '#/components/schemas/Comparison' } } } }

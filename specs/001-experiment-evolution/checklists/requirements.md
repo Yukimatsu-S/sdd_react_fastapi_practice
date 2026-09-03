@@ -39,3 +39,4 @@
 - Re-validated on 2026-09-03 after defining Run candidate fields, stable ordering, search filters, and token-based pagination. All 16 checks pass.
 - Re-validated on 2026-09-03 after defining Dataset Input matching, difference labels, unavailable states, and the boundary between metadata comparison and row-level data comparison. All 16 checks pass.
 - Re-validated on 2026-09-03 after defining the selected-centered Lineage order, branch relationships, and the distinction between an absent parent and an unregistered upstream boundary Run. All 16 checks pass.
+- Re-validated on 2026-09-03 after limiting stored and displayed Metrics to the smallest step with maximum accuracy, defining tie behavior, and separating lazy best-step Metric loading from full histories. All 16 checks pass.

@@ -15,7 +15,7 @@
 - Q: 外部で実行済みのRunの情報は、どの方法でこの製品に取り込みますか？ → A: MLflowからRun、実測条件、評価指標、データセット識別情報を読み込む。
 - Q: 本製品とMLflowは学習処理についてどのように責務を分けますか？ → A: 学習処理は本製品の外部で行い、外部の学習コードが実行結果をMLflowに記録する。本製品から学習を開始・停止・再実行しない。
 - Q: 初期MVPで連携する実験管理ツールはどれにしますか？ → A: MLflowのみを対象にする。
-- Q: MLflowから取得した実測条件と評価指標は、どのように扱いますか？ → A: 取得できるすべてをEvolution Step詳細に表示する。自動結果差分はaccuracyだけを対象とし、複数回記録されたaccuracyは最大値を最良accuracyとして比較する。
+- Q: MLflowから取得した実測条件と評価指標は、どのように扱いますか？ → A: 実測条件は取得できるすべてをEvolution Step詳細に表示する。評価指標はaccuracyが最大となったstepに記録された値を詳細で表示し、自動結果差分はaccuracyだけを対象とする。
 - Q: 手動で記録する変更内容とMLflowから取得する実測条件をどのように区別しますか？ → A: 前者は変更の意図・予定・定性的説明、後者は実行済みRunのParametersとする。
 - Q: 実行結果Runの紐付け後にEvolution Step情報を編集できますか？ → A: 目的、仮説、変更内容はいつでも編集でき、各編集は変更前後、編集日時、時系列順を確認できる全履歴として保持する。
 - Q: RunとLineageの関係にはどの制約を設けますか？ → A: Evolution Stepの派生元Runと実行結果Runは各0件または1件、Runを実行結果として紐付けられるEvolution Stepは0件または1件とする。Runは複数の後続Evolution Stepの派生元として参照でき、重複・同一指定・循環する紐付けは拒否する。
@@ -31,10 +31,11 @@
 
 - Q: Evolution Step一覧には、識別情報に加えてどこまで比較結果を表示しますか？ → A: 目的、仮説、派生元Run、実行結果Run、作成日時、更新日時に加え、比較可否、実測条件の変更件数、最良accuracyとその増減、およびデータセットの変更状態を要約表示する。具体的な実測条件差分とデータセット識別情報の差分は比較表示で確認し、変更なしと比較情報なしを区別する。
 - Q: accuracyの記録値と画面表示の単位をどのように統一しますか？ → A: 外部の学習コードはaccuracyを0以上1以下の比率としてMLflowへ記録し、本製品は取得した数値を保持する。画面では最良accuracyを百分率、その増減をパーセントポイントで表示する。
-- Q: 学習中のRunを紐付けた場合、Snapshotをいつ確定しますか？ → A: Runの参照関係は学習中でも保存し、Snapshotを未確定として表示する。Evolution Step詳細を開いた時に対象Runの状態を自動確認し、RunがFINISHED、FAILED、またはKILLEDの終了状態なら、その時点のParameters、Metrics、データセット識別情報などを一度だけ取り込んでSnapshotを確定する。RUNNINGまたはSCHEDULEDなら未確定のままとする。確定後のSnapshotは更新せず、Run名と現在状態だけを表示情報として同期する。
+- Q: 学習中のRunを紐付けた場合、Snapshotをいつ確定しますか？ → A: Runの参照関係は学習中でも保存し、Snapshotを未確定として表示する。Evolution Step詳細を開いた時に対象Runの状態を自動確認し、RunがFINISHED、FAILED、またはKILLEDの終了状態なら、その時点のParameters、最良stepのMetrics、データセット識別情報などを一度だけ取り込んでSnapshotを確定する。RUNNINGまたはSCHEDULEDなら未確定のままとする。確定後のSnapshotは更新せず、Run名と現在状態だけを表示情報として同期する。
 - Q: アプリ内で選択するRun候補は、どのように検索・表示しますか？ → A: MLflowの有効なExperimentに属する削除されていないRunを、開始日時の新しい順で20件ずつ取得する。候補にはRun ID、Run名、MLflow ExperimentのIDと名前、状態、開始日時、終了日時を表示する。Run名の大文字小文字を区別しない部分一致で検索でき、同名RunはRun IDで区別する。
 - Q: Dataset Inputの差分は、どの単位と表現で示しますか？ → A: 用途と名前が同じDataset Inputを対応付け、digestまたは取得済みのsource識別情報が異なる場合は`changed`とする。片方にだけ対応候補がある場合は`parent_only`または`result_only`とし、データ行の追加・削除を意味する`added`または`removed`とは表現しない。いずれかのRunにDataset Inputが一件も記録されていない場合は比較情報なしとする。
 - Q: Lineageは、選択したEvolution Stepを基準にどの順序と境界で表示しますか？ → A: 選択したEvolution Stepを中心とし、祖先と子孫をそれぞれ直近の世代から外側へ表示する。同じ世代の子孫はEvolution Step ID順とする。派生元Runが未設定ならそのStepより上流は存在せず、派生元Runが設定されていてもそれを実行結果とするEvolution Stepが登録されていなければ、そのRunを追跡可能範囲の上流境界として表示する。
+- Q: Metricはどの時点の値をSnapshotへ保存・表示しますか？ → A: accuracy履歴から最大値のstepを選び、そのstepに記録された各Metricだけを保存して詳細表示する。最大accuracyが複数stepにある場合は最小stepを選び、同じMetricが選択stepで複数回記録されている場合は最新時刻の値を採用する。全stepのMetric履歴は保存・表示しない。
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -86,7 +87,7 @@
 2. **Given** 一覧にEvolution Stepが表示されている状態、**When** 開発者がEvolution Stepを一つ選択する、**Then** そのEvolution Stepの目的、仮説、関連するRun情報、実測条件、評価指標、データセット識別情報を確認できる。
 3. **Given** 派生元Runと実行結果Runを持つEvolution Stepが一覧に表示されている状態、**When** 開発者が比較結果の要約を確認する、**Then** 実測条件の変更件数、各Runの最良accuracyとその増減、およびデータセットが変更あり・変更なし・比較情報なしのいずれであるかを確認できる。
 4. **Given** 派生元Runまたは実行結果Runが未設定で比較できないEvolution Stepがある状態、**When** 開発者がEvolution Step一覧を表示する、**Then** 数値を変更なしとして表示せず、比較できない状態と理由を確認できる。
-5. **Given** Evolution Stepに紐付くRunの名前がMLflow上で変更されている状態、**When** 開発者がそのEvolution Stepの詳細を開く、**Then** 保存済み詳細が表示された後にRun情報が自動同期され、現在のRun名、状態、および同期日時を確認できる。確定済みのParameters、Metrics、およびデータセット識別情報は変更されない。
+5. **Given** Evolution Stepに紐付くRunの名前がMLflow上で変更されている状態、**When** 開発者がそのEvolution Stepの詳細を開く、**Then** 保存済み詳細が表示された後にRun情報が自動同期され、現在のRun名、状態、および同期日時を確認できる。確定済みのParameters、最良stepのMetrics、およびデータセット識別情報は変更されない。
 6. **Given** Evolution StepにRunが紐付いておりMLflowへ接続できない状態、**When** 開発者がそのEvolution Stepの詳細を開く、**Then** 保存済み詳細の表示は失敗せず、最後に同期できたRun名、状態、同期日時、Snapshotの確定状態、および同期できなかったことを確認できる。
 
 ---
@@ -108,6 +109,7 @@
 5. **Given** 派生元Runまたは実行結果Runのどちらかにaccuracyが記録されていない状態、**When** 利用者が結果差分を確認する、**Then** accuracy差分は算出されず、比較できない理由を確認できる。
 6. **Given** 両方のRunにDataset Inputが記録され、同じ用途と名前の対応候補が片方にだけ存在する状態、**When** 開発者がデータセット識別情報の差分を確認する、**Then** その候補が派生元Runだけにある場合は`parent_only`、実行結果Runだけにある場合は`result_only`として確認できる。
 7. **Given** 派生元Runまたは実行結果RunのどちらかにDataset Inputが一件も記録されていない状態、**When** 開発者がデータセット識別情報の差分を確認する、**Then** Datasetが同一または変更されたとは判定されず、比較情報がないことを確認できる。
+8. **Given** 一つのRunで最大accuracyが複数stepに記録され、各stepに複数のMetricがある状態、**When** 開発者がEvolution Step詳細で評価指標を確認する、**Then** 最大accuracyへ最初に到達した最小stepと、そのstepに記録された各Metricだけを確認できる。
 
 ---
 
@@ -161,8 +163,8 @@
 - **FR-010**: システムは、同じRunを同じEvolution Stepの派生元Runと実行結果Runの両方に指定すること、および新しい紐付けによってLineageに循環を生じさせることを拒否し、その理由を利用者に示さなければならない。
 - **FR-011**: システムは、Evolution Stepに手動で紐付けたRunについて、Run IDとの参照関係を直ちに記録し、Snapshot確定後は取得した実測条件、評価指標、およびデータセット識別情報を後から確認できるようにしなければならない。
 - **FR-012**: システムは、派生元Runが指定されたEvolution Stepについて、MLflowから取得できるすべての実測条件を表示し、派生元Runと実行結果Runの追加、変更、削除を比較表示できるようにしなければならない。
-- **FR-013**: システムは、MLflowから取得できるすべての評価指標をEvolution Step詳細で表示しなければならない。
-- **FR-014**: システムは、派生元Runと実行結果Runの両方にaccuracyが記録されている場合、各Runの最大accuracyを最良accuracyとして百分率で表示し、実行結果Runの最良accuracyから派生元Runの最良accuracyを引いた増減をパーセントポイントで表示しなければならない。保存する値はMLflowから取得した0以上1以下の比率を維持しなければならない。
+- **FR-013**: システムは、accuracyが最大となる最小stepを各Runの最良stepとして選び、そのstepに記録された各Metricの名前と値だけをEvolution Step詳細で表示しなければならない。同じMetricが最良stepで複数回記録されている場合は最新時刻の値を採用し、当該stepに記録されていないMetricを別stepの値で補完してはならない。全stepのMetric履歴を保存または表示してはならない。
+- **FR-014**: システムは、派生元Runと実行結果Runの両方にaccuracyが記録されている場合、各Runの最大accuracyを最良accuracyとして百分率で表示し、実行結果Runの最良accuracyから派生元Runの最良accuracyを引いた増減をパーセントポイントで表示しなければならない。最大accuracyが複数stepにある場合は最小stepを最良stepとし、保存する値はMLflowから取得した0以上1以下の比率を維持しなければならない。
 - **FR-015**: システムは、accuracy以外の評価指標について、最大化・最小化の判定、最良値の自動選択、および自動的な結果差分の算出を行ってはならない。利用者が比較対象の評価指標を選択する機能も提供してはならない。
 - **FR-016**: システムは、派生元Runが指定されたEvolution Stepについて、用途と名前が同じDataset Inputを対応付け、digestおよび取得済みのsource識別情報を比較しなければならない。識別情報が異なる対応候補は`changed`、派生元Runだけにある候補は`parent_only`、実行結果Runだけにある候補は`result_only`として差分だけを表示し、これらをDataset内のデータ行の追加・削除として表現してはならない。いずれかのRunにDataset Inputが一件も記録されていない場合は、変更なしではなく比較情報なしとして表示しなければならない。
 - **FR-017**: システムは、利用者が選択したEvolution Stepを中心として、すべての祖先と子孫をそれぞれ直近の世代から外側へ確認できるようにしなければならない。各Evolution Stepについて選択対象からの距離と直前のEvolution Stepを識別できるようにし、同じ世代の子孫はEvolution Step IDの昇順で表示しなければならない。派生元Runが未設定なら上流探索を終了し、派生元Runを実行結果とするEvolution Stepが登録されていない場合は、そのRunを追跡可能範囲の上流境界として表示して探索を終了しなければならない。
@@ -174,8 +176,8 @@
 - **FR-023**: システムは、派生元Runまたは実行結果Runの変更・解除について、変更対象、変更前のRun、変更後のRun、変更日時を変更履歴として保持し、過去の紐付けを確認できるようにしなければならない。
 - **FR-024**: システムは、Runの変更・解除後、現在の紐付けをもとにLineageを再構成しなければならない。更新は対象のEvolution Stepだけに適用し、他のEvolution Stepの派生元Runまたは実行結果Runを自動変更してはならない。
 - **FR-025**: システムは、MLflow上でRUNNINGまたはSCHEDULEDのRunをEvolution Stepへ紐付け、Snapshot未確定のRun参照として保持できなければならない。
-- **FR-026**: システムは、Evolution Step詳細表示時に、紐付いたRunの現在の名前と状態を自動的に同期しなければならない。Snapshot未確定のRunがFINISHED、FAILED、またはKILLEDである場合は、その時点のRun情報、Parameters、Metrics、およびデータセット識別情報を取得し、Snapshotを一度だけ確定しなければならない。
-- **FR-027**: システムは、確定済みSnapshotのParameters、Metrics、データセット識別情報、確定時の実行状態、実行日時、およびその他のSnapshot情報を更新してはならない。現在のRun名、状態、実行日時、および最終同期日時だけをRun Reference上の変更可能な表示情報として扱い、それらの同期によって比較結果またはLineageが変化してはならない。
+- **FR-026**: システムは、Evolution Step詳細表示時に、紐付いたRunの現在の名前と状態を自動的に同期しなければならない。Snapshot未確定のRunがFINISHED、FAILED、またはKILLEDである場合は、その時点のRun情報、Parameters、最良stepのMetrics、およびデータセット識別情報を取得し、Snapshotを一度だけ確定しなければならない。
+- **FR-027**: システムは、確定済みSnapshotのParameters、最良stepのMetrics、データセット識別情報、確定時の実行状態、実行日時、およびその他のSnapshot情報を更新してはならない。現在のRun名、状態、実行日時、および最終同期日時だけをRun Reference上の変更可能な表示情報として扱い、それらの同期によって比較結果またはLineageが変化してはならない。
 - **FR-028**: システムは、Evolution Step詳細表示時のRun同期に失敗した場合でも、最後に同期できたRun名、状態、同期日時、およびSnapshotの確定状態を含む保存済み情報を表示し、同期できなかったことを利用者に示さなければならない。Runを初めて紐付ける際にMLflow上の存在を確認できない場合は、紐付けを完了してはならない。
 - **FR-029**: システムは、Run候補を開始日時の降順、同一開始日時ではRun IDの昇順で20件ずつ返し、続きがある場合は次の候補群を取得するための値を提供しなければならない。利用者はRun名の大文字小文字を区別しない部分一致によって候補を任意で検索できなければならない。
 
@@ -185,10 +187,10 @@
 - **Evolution Step**: 派生元Runから実行結果Runへ進む一回の改善工程。改善の目的と仮説を表し、派生元Runを0件または1件、手動で紐付ける実行結果Runを0件または1件持つ。実行結果Runが未設定の状態でも登録でき、両方のRunは登録後に変更または解除できる。
 - **Run**: 外部の学習コードがMLflowに記録した一回の学習の記録。実行状態、実測条件、評価指標、およびデータセット識別情報を持つ。
 - **Run Reference**: Evolution StepとMLflow RunをRun IDで結ぶ参照情報。Snapshotが未確定でも保持できる。Run IDを不変の識別子とし、現在のRun名、現在状態、実行日時、および最終同期日時を変更可能な表示情報として持つ。
-- **Run Snapshot**: RunがFINISHED、FAILED、またはKILLEDになったことを確認した時点で一度だけ保存するParameters、Metrics、データセット識別情報、およびその他の実行情報。比較と振り返りの根拠として再利用し、確定後は更新しない。
+- **Run Snapshot**: RunがFINISHED、FAILED、またはKILLEDになったことを確認した時点で一度だけ保存するParameters、最良accuracyと最良step、そのstepのMetrics、データセット識別情報、およびその他の実行情報。比較と振り返りの根拠として再利用し、確定後は更新しない。
 - **変更内容**: 利用者が記録する、派生元から追加、変更、または削除する意図・予定・定性的説明。
 - **実測条件**: MLflowに記録された、実行済みRunの名前と値を持つ条件。取得できるすべてを表示し、派生元との差分として追加、変更、削除を識別できる。
-- **評価指標**: MLflowから取得する、学習結果を評価する名前と値を持つ測定値。取得できるすべてを表示する。自動結果差分はaccuracyだけを対象とし、accuracy以外の最良値は自動選択しない。
+- **評価指標**: MLflowから取得する、学習結果を評価する名前と値を持つ測定値。最大accuracyへ最初に到達した最小stepに記録されたものだけを表示する。自動結果差分はaccuracyだけを対象とし、accuracy以外の最良値は自動選択しない。
 - **Dataset Input／データセット識別情報**: Runで使用したDatasetとその用途をMLflowへ記録した入力情報、およびDatasetの名前、digest、sourceなどの識別情報。比較結果はRun間の記録と識別情報の相違を示し、Dataset内のデータ行単位の増減は示さない。
 - **Lineage**: 複数のEvolution StepをRunの派生関係で結んだ、循環のない系譜。選択したEvolution Stepを中心として、祖先方向と子孫方向へ世代順にたどるために用いる。保存済みの現在の紐付けから導出し、派生元Runを実行結果とするEvolution Stepが登録されていない場合は、そのRunを追跡可能範囲の上流境界とする。
 - **変更履歴**: Evolution Stepの目的、仮説、変更内容、派生元Run、または実行結果Runの各編集について、変更対象、変更前と変更後の内容またはRun、編集日時を表す記録。Runの解除では変更後のRunを未設定として記録する。
@@ -209,6 +211,7 @@
 - Lineageから任意のEvolution StepまたはRunを直接除外する操作
 - 本製品からの学習処理の開始、停止、再実行
 - Dataset内のデータ行単位の追加、変更、削除の特定
+- 全stepのMetric履歴の保存および表示
 
 ## Assumptions
 
@@ -217,11 +220,11 @@
 - 外部の学習コードは、accuracyを0以上1以下の比率としてMLflowへ記録する。
 - 学習処理は本製品の外部で行い、外部の学習コードが実行結果をMLflowに記録する。本製品はMLflowからRun、実測条件、評価指標、データセット識別情報を取得する。初期MVPで連携する実験管理ツールはMLflowのみとする。
 - 変更内容は、利用者が記録する変更の意図・予定・定性的説明である。実測条件は、MLflowから取得する実行済みRunの条件であり、両者を区別して表示する。
-- 実測条件はMLflowから取得できるすべてを表示および比較の対象とする。評価指標はMLflowから取得できるすべてを表示するが、自動結果差分はaccuracyだけを対象とする。一つのRunでaccuracyが複数回記録されている場合は最大値を最良accuracyとする。accuracy以外の評価指標の最大化・最小化の判定、最良値の自動選択、利用者による比較対象の選択は初期MVPに含めない。
+- 実測条件はMLflowから取得できるすべてを表示および比較の対象とする。評価指標は最大accuracyへ最初に到達した最小stepに記録された値だけを表示し、別stepの値で補完しない。自動結果差分はaccuracyだけを対象とする。accuracy以外の評価指標の最大化・最小化の判定、最良値の自動選択、利用者による比較対象の選択、および全stepのMetric履歴の保存・表示は初期MVPに含めない。
 - Run候補の取得時はMLflow上の現在のRun名と状態を表示する。RunをEvolution Stepへ紐付ける時はMLflow上の存在を確認し、Run Referenceを保存する。RUNNINGまたはSCHEDULEDならSnapshot未確定、FINISHED、FAILED、またはKILLEDならSnapshot確定として扱う。
 - Run候補は一度に20件を取得する。次の候補群を示す値は利用者へ直接入力させず、フロントエンドが同じ検索条件とともに保持して使用する。総件数は初期MVPでは表示しない。
 - Evolution Step詳細は保存済み情報を先に表示し、その後で紐付いたRunを自動同期する。Snapshot未確定のRunが終了状態ならSnapshotを確定し、実行中なら未確定のままとする。同期に失敗しても保存済み情報の閲覧を妨げない。
-- 一度確定したRun SnapshotのParameters、Metrics、データセット識別情報、確定時の実行状態、実行日時、および未加工メタデータは更新しない。Run ReferenceのRun名、現在状態、実行日時、および最終同期日時だけを変更可能な表示用情報として扱う。
+- 一度確定したRun SnapshotのParameters、最良accuracyと最良step、そのstepのMetrics、データセット識別情報、確定時の実行状態、実行日時、および未加工メタデータは更新しない。Run ReferenceのRun名、現在状態、実行日時、および最終同期日時だけを変更可能な表示用情報として扱う。
 - 確定済みRunを再開して追加学習する代わりに、継続学習を別の改善工程として追跡したい場合は、元Runのモデルまたはチェックポイントを引き継いだ新しいRun IDを作成し、新しいEvolution Stepの実行結果として紐付ける。
 - Dataset Inputは用途と名前で対応付け、digestとsource識別情報を比較する。対応候補が複数あり一意に対応付けられない場合、またはいずれかのRunにDataset Inputが一件も記録されていない場合は比較情報なしとする。`parent_only`と`result_only`は各Runに記録されたDataset Inputの有無を表し、Dataset内のデータ行が追加または削除されたことを意味しない。定性的なデータ変更の説明は、Evolution Stepの変更内容として記録する。
 - 一つのEvolution Stepが持つ派生元Runは0件または1件、実行結果Runは0件または1件とする。一つのRunを実行結果として紐付けられるEvolution Stepは0件または1件とする。実行結果Runは学習中から手動で紐付けることができ、未設定のEvolution Stepも登録できる。
