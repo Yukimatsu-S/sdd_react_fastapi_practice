@@ -20,6 +20,14 @@
 
 Indexes: `UNIQUE(result_run_id)`, `INDEX(parent_run_id)`, and `INDEX(created_at DESC, id DESC)` for the list. The `result_run_id` uniqueness permits multiple `NULL` values in MySQL.
 
+### `lineage_mutation_guard`
+
+| Field | Type | Rules |
+|---|---|---|
+| `id` | tinyint PK | Singleton row; the migration inserts the fixed value `1` |
+
+This row stores no product data. A transaction that can add, change, or remove a parent/result Run link locks row `1` with `SELECT ... FOR UPDATE` before locking an Evolution Step or reading current Lineage edges. This serializes Lineage mutations across application instances while allowing unrelated read requests to proceed.
+
 ### `run_reference`
 
 | Field | Type | Rules |
@@ -82,11 +90,12 @@ The API serializes the database field names as `purpose`, `hypothesis`, `changeD
 
 1. For each selected Run ID, reuse its saved Run Reference when present. When absent, retrieve the Run from MLflow before the database transaction; failure to confirm its existence rejects the link without partial changes.
 2. If the newly retrieved Run is active, prepare only a Run Reference. If it is terminal, also retrieve its complete Snapshot payload before opening the database transaction.
-3. In one transaction, lock the target Evolution Step row and validate non-blank `purpose` and `hypothesis`.
-4. Reject equal non-null parent and result Run IDs.
-5. Let `UNIQUE(result_run_id)` reject a result Run claimed by another Evolution Step; map the database conflict to API `409`.
-6. Substitute proposed links for the target Evolution Step, construct all complete current edges, and detect a Run-ID cycle by DFS with `visiting` and `visited` sets. Reject a cycle with `409` before commit.
-7. Insert or update Run References, insert any first terminal Snapshots, update only the target Evolution Step, and append one history record per changed field. Do not modify any dependent Evolution Step or overwrite a Snapshot.
+3. Begin one database transaction. When the request can change a Run link, lock `lineage_mutation_guard.id = 1` first, then lock the target Evolution Step row when it already exists. Every Lineage mutation must acquire locks in this order.
+4. Read the current Lineage edges after acquiring the guard and validate non-blank `purpose` and `hypothesis`.
+5. Reject equal non-null parent and result Run IDs.
+6. Let `UNIQUE(result_run_id)` reject a result Run claimed by another Evolution Step; map the database conflict to API `409`.
+7. Substitute proposed links for the target Evolution Step, construct all complete current edges, and detect a Run-ID cycle by DFS with `visiting` and `visited` sets. Reject a cycle with `409` before commit.
+8. Insert or update Run References, insert any first terminal Snapshots, update only the target Evolution Step, and append one history record per changed field. Do not modify any dependent Evolution Step or overwrite a Snapshot. Commit or roll back before another Lineage mutation can acquire the guard.
 
 ## Run synchronization
 
