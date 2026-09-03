@@ -13,7 +13,8 @@ paths:
         - $ref: '#/components/parameters/Query'
         - $ref: '#/components/parameters/PageToken'
       responses:
-        '200': { $ref: '#/components/responses/RunPage' }
+        '200': { $ref: '#/components/responses/RunCandidatePage' }
+        '422': { $ref: '#/components/responses/ValidationError' }
         '502': { $ref: '#/components/responses/MlflowUnavailable' }
   /runs/{runId}/sync:
     parameters: [ { $ref: '#/components/parameters/RunId' } ]
@@ -74,8 +75,16 @@ components:
   parameters:
     EvolutionStepId: { name: evolutionStepId, in: path, required: true, schema: { type: integer, minimum: 1 } }
     RunId: { name: runId, in: path, required: true, schema: { type: string, minLength: 1 } }
-    Query: { name: query, in: query, schema: { type: string } }
-    PageToken: { name: pageToken, in: query, schema: { type: string } }
+    Query:
+      name: query
+      in: query
+      description: Case-insensitive substring of the MLflow Run name.
+      schema: { type: string, minLength: 1, maxLength: 100 }
+    PageToken:
+      name: pageToken
+      in: query
+      description: Opaque token returned by the previous page; reuse it only with the same filters.
+      schema: { type: string, minLength: 1 }
   schemas:
     EvolutionStepCreate:
       type: object
@@ -98,6 +107,28 @@ components:
         changeDescription: { type: [string, 'null'], minLength: 1, pattern: '\S' }
         parentRunId: { type: [string, 'null'] }
         resultRunId: { type: [string, 'null'] }
+    RunCandidatePage:
+      type: object
+      additionalProperties: false
+      required: [items, nextPageToken]
+      properties:
+        items:
+          type: array
+          maxItems: 20
+          items: { $ref: '#/components/schemas/RunCandidate' }
+        nextPageToken: { type: [string, 'null'] }
+    RunCandidate:
+      type: object
+      additionalProperties: false
+      required: [runId, runName, mlflowExperimentId, mlflowExperimentName, status, startedAt, endedAt]
+      properties:
+        runId: { type: string }
+        runName: { type: [string, 'null'] }
+        mlflowExperimentId: { type: string }
+        mlflowExperimentName: { type: string }
+        status: { type: string, enum: [RUNNING, SCHEDULED, FINISHED, FAILED, KILLED] }
+        startedAt: { type: [string, 'null'], format: date-time }
+        endedAt: { type: [string, 'null'], format: date-time }
     RunSummary:
       type: object
       additionalProperties: false
@@ -248,7 +279,7 @@ components:
       required: [code, message, traceId]
       properties: { code: { type: string }, message: { type: string }, traceId: { type: string } }
   responses:
-    RunPage: { description: Run candidates, content: { application/json: { schema: { type: object, additionalProperties: true } } } }
+    RunCandidatePage: { description: One token-paginated group of current MLflow Run candidates, content: { application/json: { schema: { $ref: '#/components/schemas/RunCandidatePage' } } } }
     RunSyncResult: { description: Current Run reference and optional finalized Snapshot, content: { application/json: { schema: { $ref: '#/components/schemas/RunSyncResult' } } } }
     EvolutionStepList: { description: Stored Evolution Steps with compact comparison summaries, content: { application/json: { schema: { $ref: '#/components/schemas/EvolutionStepList' } } } }
     EvolutionStepDetail: { description: Evolution Step detail using locally saved Run references and optional finalized Snapshots, content: { application/json: { schema: { $ref: '#/components/schemas/EvolutionStepDetail' } } } }

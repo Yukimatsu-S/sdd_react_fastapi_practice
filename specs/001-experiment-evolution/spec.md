@@ -32,6 +32,7 @@
 - Q: Evolution Step一覧には、識別情報に加えてどこまで比較結果を表示しますか？ → A: 目的、仮説、派生元Run、実行結果Run、作成日時、更新日時に加え、比較可否、実測条件の変更件数、最良accuracyとその増減、およびデータセットの変更状態を要約表示する。具体的な実測条件差分とデータセット識別情報の差分は比較表示で確認し、変更なしと比較情報なしを区別する。
 - Q: accuracyの記録値と画面表示の単位をどのように統一しますか？ → A: 外部の学習コードはaccuracyを0以上1以下の比率としてMLflowへ記録し、本製品は取得した数値を保持する。画面では最良accuracyを百分率、その増減をパーセントポイントで表示する。
 - Q: 学習中のRunを紐付けた場合、Snapshotをいつ確定しますか？ → A: Runの参照関係は学習中でも保存し、Snapshotを未確定として表示する。Evolution Step詳細を開いた時に対象Runの状態を自動確認し、RunがFINISHED、FAILED、またはKILLEDの終了状態なら、その時点のParameters、Metrics、データセット識別情報などを一度だけ取り込んでSnapshotを確定する。RUNNINGまたはSCHEDULEDなら未確定のままとする。確定後のSnapshotは更新せず、Run名と現在状態だけを表示情報として同期する。
+- Q: アプリ内で選択するRun候補は、どのように検索・表示しますか？ → A: MLflowの有効なExperimentに属する削除されていないRunを、開始日時の新しい順で20件ずつ取得する。候補にはRun ID、Run名、MLflow ExperimentのIDと名前、状態、開始日時、終了日時を表示する。Run名の大文字小文字を区別しない部分一致で検索でき、同名RunはRun IDで区別する。
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -64,6 +65,8 @@
 17. **Given** MLflow上でRUNNINGまたはSCHEDULEDのRunが存在する状態、**When** 利用者がそのRunをEvolution Stepへ紐付ける、**Then** Runとの参照関係は保存され、Snapshot未確定として確認できる。
 18. **Given** Snapshot未確定のRunがMLflow上でRUNNINGまたはSCHEDULEDの状態、**When** 利用者がEvolution Step詳細を開く、**Then** Runの現在状態と名前が同期され、Snapshotは未確定のまま表示される。
 19. **Given** Snapshot未確定のRunがMLflow上でFINISHED、FAILED、またはKILLEDの状態、**When** 利用者がEvolution Step詳細を開く、**Then** Runの現在情報が取得され、Snapshotが一度だけ確定される。
+20. **Given** MLflowに21件以上のRunが存在する状態、**When** 利用者がRun選択欄を開く、**Then** 開始日時の新しい順で最初の20件を確認でき、続きがある場合だけ次の候補群を取得できる。
+21. **Given** 同じRun名を持つ複数のRunが存在する状態、**When** 利用者がRun候補を確認する、**Then** MLflow Experiment、状態、実行日時、およびRun IDによって各Runを区別して選択できる。
 
 ---
 
@@ -147,7 +150,7 @@
 - **FR-003**: システムは、利用者が新しいEvolution Stepに対して派生元となる既存Runを任意で指定できるようにしなければならない。
 - **FR-004**: システムは、利用者が派生元から追加、変更、または削除する意図・予定・定性的説明を、任意の変更内容としてEvolution Stepごとに記録できるようにしなければならない。変更内容を入力する場合は空白以外の文字を1文字以上必要とし、空文字または空白だけの値を拒否しなければならない。
 - **FR-005**: システムは、利用者が登録済みEvolution Stepの目的、仮説、派生元、変更内容、関連するRun情報、実測条件、評価指標、およびデータセット識別情報を詳細で確認できるようにしなければならない。
-- **FR-006**: システムは、MLflowからRun、実測条件、評価指標、およびデータセット識別情報を取得し、利用者が取得済みのRunを選択できるようにしなければならない。
+- **FR-006**: システムは、MLflowの有効なExperimentに属する削除されていないRunを候補として取得し、Run ID、Run名、MLflow ExperimentのIDと名前、状態、開始日時、および終了日時を表示して利用者が選択できるようにしなければならない。
 - **FR-007**: システムは、利用者が取得済みのRunを選択し、登録済みのEvolution Stepの実行結果として手動で一件だけ紐付けられるようにしなければならない。実行結果Runが未設定のEvolution Stepも登録できなければならない。
 - **FR-008**: システムは、一つのRunを実行結果として紐付けられるEvolution Stepを0件または1件に制限し、すでに別のEvolution Stepの実行結果RunであるRunを紐付けようとした場合は拒否しなければならない。
 - **FR-009**: システムは、アプリ内のEvolution Stepに実行結果として紐付いていないMLflow Runを含め、一つのRunを複数の後続Evolution Stepの派生元として参照できるようにしなければならない。
@@ -170,6 +173,7 @@
 - **FR-026**: システムは、Evolution Step詳細表示時に、紐付いたRunの現在の名前と状態を自動的に同期しなければならない。Snapshot未確定のRunがFINISHED、FAILED、またはKILLEDである場合は、その時点のRun情報、Parameters、Metrics、およびデータセット識別情報を取得し、Snapshotを一度だけ確定しなければならない。
 - **FR-027**: システムは、確定済みSnapshotのParameters、Metrics、データセット識別情報、確定時の実行状態、実行日時、およびその他のSnapshot情報を更新してはならない。現在のRun名、状態、実行日時、および最終同期日時だけをRun Reference上の変更可能な表示情報として扱い、それらの同期によって比較結果またはLineageが変化してはならない。
 - **FR-028**: システムは、Evolution Step詳細表示時のRun同期に失敗した場合でも、最後に同期できたRun名、状態、同期日時、およびSnapshotの確定状態を含む保存済み情報を表示し、同期できなかったことを利用者に示さなければならない。Runを初めて紐付ける際にMLflow上の存在を確認できない場合は、紐付けを完了してはならない。
+- **FR-029**: システムは、Run候補を開始日時の降順、同一開始日時ではRun IDの昇順で20件ずつ返し、続きがある場合は次の候補群を取得するための値を提供しなければならない。利用者はRun名の大文字小文字を区別しない部分一致によって候補を任意で検索できなければならない。
 
 ### Key Entities
 
@@ -210,6 +214,7 @@
 - 変更内容は、利用者が記録する変更の意図・予定・定性的説明である。実測条件は、MLflowから取得する実行済みRunの条件であり、両者を区別して表示する。
 - 実測条件はMLflowから取得できるすべてを表示および比較の対象とする。評価指標はMLflowから取得できるすべてを表示するが、自動結果差分はaccuracyだけを対象とする。一つのRunでaccuracyが複数回記録されている場合は最大値を最良accuracyとする。accuracy以外の評価指標の最大化・最小化の判定、最良値の自動選択、利用者による比較対象の選択は初期MVPに含めない。
 - Run候補の取得時はMLflow上の現在のRun名と状態を表示する。RunをEvolution Stepへ紐付ける時はMLflow上の存在を確認し、Run Referenceを保存する。RUNNINGまたはSCHEDULEDならSnapshot未確定、FINISHED、FAILED、またはKILLEDならSnapshot確定として扱う。
+- Run候補は一度に20件を取得する。次の候補群を示す値は利用者へ直接入力させず、フロントエンドが同じ検索条件とともに保持して使用する。総件数は初期MVPでは表示しない。
 - Evolution Step詳細は保存済み情報を先に表示し、その後で紐付いたRunを自動同期する。Snapshot未確定のRunが終了状態ならSnapshotを確定し、実行中なら未確定のままとする。同期に失敗しても保存済み情報の閲覧を妨げない。
 - 一度確定したRun SnapshotのParameters、Metrics、データセット識別情報、確定時の実行状態、実行日時、および未加工メタデータは更新しない。Run ReferenceのRun名、現在状態、実行日時、および最終同期日時だけを変更可能な表示用情報として扱う。
 - 確定済みRunを再開して追加学習する代わりに、継続学習を別の改善工程として追跡したい場合は、元Runのモデルまたはチェックポイントを引き継いだ新しいRun IDを作成し、新しいEvolution Stepの実行結果として紐付ける。

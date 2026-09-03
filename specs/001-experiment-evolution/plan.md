@@ -36,7 +36,7 @@ Runの紐付け時、FastAPIはMLflow上の存在、名前、状態を確認し�
 
 | Principle | Design response | Status |
 |-----------|-----------------|--------|
-| I. Spec-Driven Delivery | This plan, data model, HTTP contract, quickstart, and subsequent tasks trace to FR-001 through FR-028 and SC-001 through SC-004. | PASS |
+| I. Spec-Driven Delivery | This plan, data model, HTTP contract, quickstart, and subsequent tasks trace to FR-001 through FR-029 and SC-001 through SC-004. | PASS |
 | II. Dual-Stack Contract Boundaries | React consumes only versioned FastAPI HTTP/JSON endpoints documented in `contracts/openapi.yaml`; FastAPI owns validation and business rules. | PASS |
 | III. Reproducible Tooling | Backend dependencies and commands use `uv`; frontend dependencies and commands use `npm`; test services are containerized. | PASS |
 | IV. Test-First Verification | Tests are specified for domain logic, persistence constraints, MLflow adapter behavior, API contracts, UI states, and end-to-end user flows before implementation. | PASS |
