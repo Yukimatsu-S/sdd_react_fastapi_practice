@@ -8,12 +8,20 @@ servers:
 paths:
   /runs:
     get:
-      summary: Search current MLflow Runs and synchronize names of returned saved Runs
+      summary: Search current MLflow Runs available for selection
       parameters:
         - $ref: '#/components/parameters/Query'
         - $ref: '#/components/parameters/PageToken'
       responses:
         '200': { $ref: '#/components/responses/RunPage' }
+        '502': { $ref: '#/components/responses/MlflowUnavailable' }
+  /runs/{runId}/sync:
+    parameters: [ { $ref: '#/components/parameters/RunId' } ]
+    post:
+      summary: Synchronize current Run metadata and capture a terminal Run Snapshot once
+      responses:
+        '200': { $ref: '#/components/responses/RunSyncResult' }
+        '404': { $ref: '#/components/responses/NotFound' }
         '502': { $ref: '#/components/responses/MlflowUnavailable' }
   /evolution-steps:
     get:
@@ -33,7 +41,7 @@ paths:
   /evolution-steps/{evolutionStepId}:
     parameters: [ { $ref: '#/components/parameters/EvolutionStepId' } ]
     get:
-      summary: Get an Evolution Step after best-effort synchronization of linked Run names
+      summary: Get an Evolution Step and locally saved linked Run state
       responses:
         '200': { $ref: '#/components/responses/EvolutionStepDetail' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -65,6 +73,7 @@ paths:
 components:
   parameters:
     EvolutionStepId: { name: evolutionStepId, in: path, required: true, schema: { type: integer, minimum: 1 } }
+    RunId: { name: runId, in: path, required: true, schema: { type: string, minLength: 1 } }
     Query: { name: query, in: query, schema: { type: string } }
     PageToken: { name: pageToken, in: query, schema: { type: string } }
   schemas:
@@ -91,13 +100,17 @@ components:
         resultRunId: { type: [string, 'null'] }
     RunSummary:
       type: object
-      required: [runId, runNameSyncedAt, importedAt]
+      additionalProperties: false
+      required: [runId, runName, currentStatus, startedAt, endedAt, lastSyncedAt, snapshotState, snapshotCapturedAt]
       properties:
         runId: { type: string }
-        status: { type: [string, 'null'] }
         runName: { type: [string, 'null'] }
-        runNameSyncedAt: { type: string, format: date-time }
-        importedAt: { type: string, format: date-time }
+        currentStatus: { type: string, enum: [RUNNING, SCHEDULED, FINISHED, FAILED, KILLED] }
+        startedAt: { type: [string, 'null'], format: date-time }
+        endedAt: { type: [string, 'null'], format: date-time }
+        lastSyncedAt: { type: string, format: date-time }
+        snapshotState: { type: string, enum: [pending, captured] }
+        snapshotCapturedAt: { type: [string, 'null'], format: date-time }
     EvolutionStepList:
       type: object
       additionalProperties: false
@@ -131,27 +144,44 @@ components:
         datasetStatus: { type: string, enum: [changed, unchanged, unavailable] }
     EvolutionStepDetail:
       type: object
-      required: [id, purpose, hypothesis, runNameSyncWarnings, createdAt, updatedAt, history]
+      additionalProperties: false
+      required: [id, purpose, hypothesis, changeDescription, parentRun, resultRun, createdAt, updatedAt, history]
       properties:
         id: { type: integer }
         purpose: { type: string }
         hypothesis: { type: string }
         changeDescription: { type: [string, 'null'] }
-        parentRun: { anyOf: [ { $ref: '#/components/schemas/RunSnapshot' }, { type: 'null' } ] }
-        resultRun: { anyOf: [ { $ref: '#/components/schemas/RunSnapshot' }, { type: 'null' } ] }
-        runNameSyncWarnings:
-          type: array
-          description: Empty when all linked Run names were synchronized; detail remains successful when warnings are present.
-          items: { $ref: '#/components/schemas/RunNameSyncWarning' }
+        parentRun: { anyOf: [ { $ref: '#/components/schemas/LinkedRun' }, { type: 'null' } ] }
+        resultRun: { anyOf: [ { $ref: '#/components/schemas/LinkedRun' }, { type: 'null' } ] }
         history: { type: array, items: { $ref: '#/components/schemas/HistoryEntry' } }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
-    RunSnapshot:
-      allOf: [ { $ref: '#/components/schemas/RunSummary' } ]
+    LinkedRun:
+      type: object
+      additionalProperties: false
+      required: [reference, snapshot]
       properties:
+        reference: { $ref: '#/components/schemas/RunSummary' }
+        snapshot: { anyOf: [ { $ref: '#/components/schemas/RunSnapshot' }, { type: 'null' } ] }
+    RunSnapshot:
+      type: object
+      additionalProperties: false
+      required: [runId, statusAtCapture, startedAt, endedAt, capturedAt, parameters, metrics, datasets]
+      properties:
+        runId: { type: string }
+        statusAtCapture: { type: string, enum: [FINISHED, FAILED, KILLED] }
+        startedAt: { type: [string, 'null'], format: date-time }
+        endedAt: { type: [string, 'null'], format: date-time }
+        capturedAt: { type: string, format: date-time }
         parameters: { type: object, additionalProperties: { type: string } }
         metrics: { type: object, additionalProperties: { type: array, items: { $ref: '#/components/schemas/MetricObservation' } } }
         datasets: { type: array, items: { type: object, additionalProperties: true } }
+    RunSyncResult:
+      type: object
+      additionalProperties: false
+      required: [run]
+      properties:
+        run: { $ref: '#/components/schemas/LinkedRun' }
     MetricObservation:
       type: object
       required: [value, timestamp]
@@ -160,14 +190,6 @@ components:
       type: object
       required: [field, changedAt]
       properties: { field: { type: string }, oldValue: { type: [string, 'null'] }, newValue: { type: [string, 'null'] }, changedAt: { type: string, format: date-time } }
-    RunNameSyncWarning:
-      type: object
-      additionalProperties: false
-      required: [runId, code, message]
-      properties:
-        runId: { type: string }
-        code: { type: string, enum: [run_name_sync_failed] }
-        message: { type: string }
     ParameterDifference:
       type: object
       additionalProperties: false
@@ -227,11 +249,12 @@ components:
       properties: { code: { type: string }, message: { type: string }, traceId: { type: string } }
   responses:
     RunPage: { description: Run candidates, content: { application/json: { schema: { type: object, additionalProperties: true } } } }
+    RunSyncResult: { description: Current Run reference and optional finalized Snapshot, content: { application/json: { schema: { $ref: '#/components/schemas/RunSyncResult' } } } }
     EvolutionStepList: { description: Stored Evolution Steps with compact comparison summaries, content: { application/json: { schema: { $ref: '#/components/schemas/EvolutionStepList' } } } }
-    EvolutionStepDetail: { description: Evolution Step detail using saved snapshot data; optional Run-name synchronization failures are returned as warnings, content: { application/json: { schema: { $ref: '#/components/schemas/EvolutionStepDetail' } } } }
+    EvolutionStepDetail: { description: Evolution Step detail using locally saved Run references and optional finalized Snapshots, content: { application/json: { schema: { $ref: '#/components/schemas/EvolutionStepDetail' } } } }
     Comparison: { description: Snapshot comparison, content: { application/json: { schema: { $ref: '#/components/schemas/Comparison' } } } }
     Lineage: { description: Ordered current lineage, content: { application/json: { schema: { $ref: '#/components/schemas/Lineage' } } } }
     Conflict: { description: Duplicate result Run, same Run links, or cyclic lineage, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
     ValidationError: { description: Invalid request, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
-    NotFound: { description: Missing Evolution Step, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
-    MlflowUnavailable: { description: A selected Run had no saved snapshot and MLflow was unavailable or returned incomplete Run data; no new snapshot or association was saved, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+    NotFound: { description: Requested Evolution Step or Run Reference was not found, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+    MlflowUnavailable: { description: MLflow was unavailable or returned incomplete required Run data; the requested synchronization, new reference, Snapshot, or association was not partially saved, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
