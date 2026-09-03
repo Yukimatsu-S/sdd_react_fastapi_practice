@@ -8,7 +8,7 @@ servers:
 paths:
   /runs:
     get:
-      summary: Search MLflow Runs available for selection
+      summary: Search current MLflow Runs and synchronize names of returned saved Runs
       parameters:
         - $ref: '#/components/parameters/Query'
         - $ref: '#/components/parameters/PageToken'
@@ -33,7 +33,7 @@ paths:
   /evolution-steps/{evolutionStepId}:
     parameters: [ { $ref: '#/components/parameters/EvolutionStepId' } ]
     get:
-      summary: Get an Evolution Step, imported Run snapshots, and ordered change history
+      summary: Get an Evolution Step after best-effort synchronization of linked Run names
       responses:
         '200': { $ref: '#/components/responses/EvolutionStepDetail' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -91,11 +91,12 @@ components:
         resultRunId: { type: [string, 'null'] }
     RunSummary:
       type: object
-      required: [runId, importedAt]
+      required: [runId, runNameSyncedAt, importedAt]
       properties:
         runId: { type: string }
         status: { type: [string, 'null'] }
         runName: { type: [string, 'null'] }
+        runNameSyncedAt: { type: string, format: date-time }
         importedAt: { type: string, format: date-time }
     EvolutionStepList:
       type: object
@@ -130,7 +131,7 @@ components:
         datasetStatus: { type: string, enum: [changed, unchanged, unavailable] }
     EvolutionStepDetail:
       type: object
-      required: [id, purpose, hypothesis, createdAt, updatedAt, history]
+      required: [id, purpose, hypothesis, runNameSyncWarnings, createdAt, updatedAt, history]
       properties:
         id: { type: integer }
         purpose: { type: string }
@@ -138,6 +139,10 @@ components:
         changeDescription: { type: [string, 'null'] }
         parentRun: { anyOf: [ { $ref: '#/components/schemas/RunSnapshot' }, { type: 'null' } ] }
         resultRun: { anyOf: [ { $ref: '#/components/schemas/RunSnapshot' }, { type: 'null' } ] }
+        runNameSyncWarnings:
+          type: array
+          description: Empty when all linked Run names were synchronized; detail remains successful when warnings are present.
+          items: { $ref: '#/components/schemas/RunNameSyncWarning' }
         history: { type: array, items: { $ref: '#/components/schemas/HistoryEntry' } }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
@@ -155,6 +160,14 @@ components:
       type: object
       required: [field, changedAt]
       properties: { field: { type: string }, oldValue: { type: [string, 'null'] }, newValue: { type: [string, 'null'] }, changedAt: { type: string, format: date-time } }
+    RunNameSyncWarning:
+      type: object
+      additionalProperties: false
+      required: [runId, code, message]
+      properties:
+        runId: { type: string }
+        code: { type: string, enum: [run_name_sync_failed] }
+        message: { type: string }
     ParameterDifference:
       type: object
       additionalProperties: false
@@ -215,7 +228,7 @@ components:
   responses:
     RunPage: { description: Run candidates, content: { application/json: { schema: { type: object, additionalProperties: true } } } }
     EvolutionStepList: { description: Stored Evolution Steps with compact comparison summaries, content: { application/json: { schema: { $ref: '#/components/schemas/EvolutionStepList' } } } }
-    EvolutionStepDetail: { description: Evolution Step detail, content: { application/json: { schema: { $ref: '#/components/schemas/EvolutionStepDetail' } } } }
+    EvolutionStepDetail: { description: Evolution Step detail using saved snapshot data; optional Run-name synchronization failures are returned as warnings, content: { application/json: { schema: { $ref: '#/components/schemas/EvolutionStepDetail' } } } }
     Comparison: { description: Snapshot comparison, content: { application/json: { schema: { $ref: '#/components/schemas/Comparison' } } } }
     Lineage: { description: Ordered current lineage, content: { application/json: { schema: { $ref: '#/components/schemas/Lineage' } } } }
     Conflict: { description: Duplicate result Run, same Run links, or cyclic lineage, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
