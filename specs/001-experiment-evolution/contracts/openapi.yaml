@@ -210,8 +210,8 @@ components:
         statusAtCapture: { type: string, enum: [FINISHED, FAILED, KILLED] }
         startedAt: { type: [string, 'null'], format: date-time }
         endedAt: { type: [string, 'null'], format: date-time }
-        bestAccuracy: { type: [number, 'null'], minimum: 0, maximum: 1 }
-        bestAccuracyStep: { type: [integer, 'null'], minimum: 0 }
+        bestAccuracy: { type: [number, 'null'], minimum: 0, maximum: 1, description: Maximum accuracy after same-key same-step observations are canonicalized }
+        bestAccuracyStep: { type: [integer, 'null'], minimum: 0, description: Smallest step containing the canonical best accuracy }
         bestAccuracyRecordedAt: { type: [string, 'null'], format: date-time }
         capturedAt: { type: string, format: date-time }
         parameters: { type: object, additionalProperties: { type: string } }
@@ -230,8 +230,8 @@ components:
         runId: { type: string }
         status: { type: string, enum: [available, unavailable] }
         unavailableReason: { type: [string, 'null'] }
-        bestAccuracy: { type: [number, 'null'], minimum: 0, maximum: 1 }
-        bestAccuracyStep: { type: [integer, 'null'], minimum: 0 }
+        bestAccuracy: { type: [number, 'null'], minimum: 0, maximum: 1, description: Maximum accuracy after same-key same-step observations are canonicalized }
+        bestAccuracyStep: { type: [integer, 'null'], minimum: 0, description: Smallest step containing the canonical best accuracy }
         bestAccuracyRecordedAt: { type: [string, 'null'], format: date-time }
         items: { type: array, items: { $ref: '#/components/schemas/BestStepMetric' } }
     BestStepMetric:
@@ -242,7 +242,7 @@ components:
         name: { type: string }
         value: { type: number }
         step: { type: integer, minimum: 0 }
-        recordedAt: { type: string, format: date-time }
+        recordedAt: { type: string, format: date-time, description: Greatest timestamp selected for this Metric name and step }
     HistoryEntry:
       type: object
       required: [field, changedAt]

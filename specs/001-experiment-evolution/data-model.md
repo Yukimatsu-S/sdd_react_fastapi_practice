@@ -41,8 +41,8 @@ Indexes: `UNIQUE(result_run_id)`, `INDEX(parent_run_id)`, and `INDEX(created_at 
 | `run_id` | varchar(64) PK/FK | One-to-one reference to `run_reference.run_id` |
 | `status_at_capture` | varchar(16) | Terminal status captured once |
 | `started_at`, `ended_at` | datetime(6) nullable | Execution times captured once in UTC |
-| `best_accuracy` | double nullable | Maximum valid `accuracy` value; null when no accuracy was logged |
-| `best_accuracy_step` | bigint nullable | Smallest MLflow step at which `best_accuracy` was reached |
+| `best_accuracy` | double nullable | Maximum canonical `accuracy` value; null when no accuracy was logged |
+| `best_accuracy_step` | bigint nullable | Smallest MLflow step at which canonical `best_accuracy` was reached |
 | `best_accuracy_recorded_at` | datetime(6) nullable | Timestamp of the selected accuracy observation |
 | `captured_at` | datetime(6) | UTC snapshot capture time |
 | `raw_metadata` | json nullable | Retained unmodeled fields for diagnosis |
@@ -57,7 +57,7 @@ When a terminal Run has no valid `accuracy` observation, `best_accuracy`, `best_
 
 ### `best_step_metric`
 
-`run_id` (FK to `run_snapshot`), `name`, `value` (double), `step` (bigint), and `recorded_at` (datetime(6)); primary key `(run_id, name)`. Every row uses `run_snapshot.best_accuracy_step`. When the same Metric has multiple observations at that step, the latest timestamp wins. A Metric with no observation at that exact step is not inserted. Full histories are used only transiently during capture and are not persisted.
+`run_id` (FK to `run_snapshot`), `name`, `value` (double), `step` (bigint), and `recorded_at` (datetime(6)); primary key `(run_id, name)`. Before selecting the best step, group observations by `(run_id, name, step)` and retain the greatest `timestamp`; if multiple values have that timestamp, retain the greatest numeric value. Every stored row then uses `run_snapshot.best_accuracy_step`. A Metric with no canonical observation at that exact step is not inserted. Full histories are used only transiently during capture and are not persisted.
 
 ### `dataset_input`
 
