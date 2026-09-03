@@ -1,4 +1,4 @@
-# Research: ML Experiment Evolution Manager
+# Research: Mondel
 
 ## MLflow integration
 
@@ -14,20 +14,20 @@
 
 ## Snapshot and service boundary
 
-- **Decision**: Import and persist a point-in-time Run snapshot only when a user selects a Run that has no saved snapshot. If the Run already has a saved snapshot, reuse it without calling MLflow again or overwriting it. For a first import, complete MLflow retrieval before committing the new snapshot and experiment association in one database transaction. Details, differences, and lineage read local data only. Automatic and manual snapshot refresh are out of scope for the initial MVP.
-- **Rationale**: Historical review survives MLflow outages and preserves the exact observed values that motivated an experiment. Reusing an immutable snapshot prevents a later association from changing data already used by earlier experiments. Atomic attach prevents an experiment from pointing at a partially imported Run.
-- **Alternatives considered**: Live reads on every detail request were rejected because outages would make saved experiments unavailable and values could drift. Replacing an existing snapshot on re-import was rejected because it would change historical comparisons for every experiment that references the same Run. Background polling and manual refresh were rejected because the feature does not require refresh behavior and it complicates audit meaning.
+- **Decision**: Import and persist a point-in-time Run snapshot only when a user selects a Run that has no saved snapshot. If the Run already has a saved snapshot, reuse it without calling MLflow again or overwriting it. For a first import, complete MLflow retrieval before committing the new snapshot and Evolution Step association in one database transaction. Details, differences, and Lineage read local data only. Automatic and manual snapshot refresh are out of scope for the initial MVP.
+- **Rationale**: Historical review survives MLflow outages and preserves the exact observed values that motivated an Evolution Step. Reusing an immutable snapshot prevents a later association from changing data already used by earlier Evolution Steps. Atomic attach prevents an Evolution Step from pointing at a partially imported Run.
+- **Alternatives considered**: Live reads on every detail request were rejected because outages would make saved Evolution Steps unavailable and values could drift. Replacing an existing snapshot on re-import was rejected because it would change historical comparisons for every Evolution Step that references the same Run. Background polling and manual refresh were rejected because the feature does not require refresh behavior and it complicates audit meaning.
 
 ## Data persistence
 
-- **Decision**: Use MySQL 8.0+ and SQLAlchemy 2.x with normalized `experiment`, `run_snapshot`, `run_parameter`, `metric_observation`, `dataset_input`, and append-only `experiment_history` tables. Save MLflow identifiers and values together with import timestamps.
+- **Decision**: Use MySQL 8.0+ and SQLAlchemy 2.x with normalized `evolution_step`, `run_snapshot`, `run_parameter`, `metric_observation`, `dataset_input`, and append-only `evolution_step_history` tables. Save MLflow identifiers and values together with import timestamps.
 - **Rationale**: The relational schema makes result-Run ownership enforceable and preserves all metric samples without opaque JSON comparison logic. JSON payload columns retain unmodeled MLflow metadata for troubleshooting without becoming the comparison source.
 - **Alternatives considered**: A graph database is unnecessary for the expected bounded MVP graph. Storing only JSON prevents indexed uniqueness and simple, deterministic comparisons.
 
 ## Result Run exclusivity and lineage validation
 
-- **Decision**: Place a nullable unique constraint on `experiment.result_run_id`. In the same transaction as every create/update, lock the edited experiment row, build the proposed set of edges where both parent and result Run exist, and run deterministic depth-first cycle detection by Run ID. The database unique constraint is the final protection against concurrent result-Run claims.
-- **Rationale**: An experiment represents an edge `$parentRun \rightarrow resultRun$`. A cycle exists exactly when the proposed directed Run graph cannot be topologically traversed. Building edges from current rows ensures a change or unlink affects only the selected experiment while validating the complete current graph.
+- **Decision**: Place a nullable unique constraint on `evolution_step.result_run_id`. In the same transaction as every create/update, lock the edited Evolution Step row, build the proposed set of edges where both parent and result Run exist, and run deterministic depth-first cycle detection by Run ID. The database unique constraint is the final protection against concurrent result-Run claims.
+- **Rationale**: An Evolution Step represents an edge `$parentRun \rightarrow resultRun$`. A cycle exists exactly when the proposed directed Run graph cannot be topologically traversed. Building edges from current rows ensures a change or unlink affects only the selected Evolution Step while validating the complete current graph.
 - **Alternatives considered**: Checking only direct parent/result equality misses multi-generation cycles. Cascading child updates violates FR-024.
 
 ## Differences

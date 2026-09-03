@@ -1,4 +1,4 @@
-# Specification Quality Checklist: ML Experiment Evolution Manager Initial MVP
+# Specification Quality Checklist: Mondel Initial MVP
 
 **Purpose**: Validate specification completeness and quality before proceeding to planning
 **Created**: 2026-09-01
@@ -33,4 +33,5 @@
 
 - Re-validated on 2026-09-01 after removing duplicate clarifications, adding an acceptance scenario for unlinking a parent Run, and removing the success criterion whose evaluation method was undefined. All 16 checks passed; no unresolved clarification markers remain.
 - Re-validated on 2026-09-02 after defining non-blank input behavior for purpose, hypothesis, and optional change descriptions. The clarification, acceptance scenario, edge case, functional requirements, API contract, and data model remain aligned; all 16 checks pass.
-- Re-validated on 2026-09-03 after defining the comparison summary shown in the experiment list, separating summary, comparison, and detail responsibilities, and fixing the accuracy recording and display convention. All 16 checks pass; the behavior remains testable and technology-agnostic.
+- Re-validated on 2026-09-03 after defining the comparison summary shown in the Evolution Step list, separating summary, comparison, and detail responsibilities, and fixing the accuracy recording and display convention. All 16 checks pass; the behavior remains testable and technology-agnostic.
+- Re-validated on 2026-09-03 after naming the product Mondel and replacing the application-owned Experiment term with Evolution Step. MLflow Experiment remains the external grouping term, while Lineage means the graph derived from connected Evolution Steps. All 16 checks pass.

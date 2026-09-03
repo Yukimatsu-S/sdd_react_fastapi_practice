@@ -1,6 +1,6 @@
 openapi: 3.1.0
 info:
-  title: ML Experiment Evolution Manager API
+  title: Mondel API
   version: 1.0.0
   description: HTTP/JSON contract for the initial MVP. MLflow access is performed only by the server.
 servers:
@@ -15,60 +15,60 @@ paths:
       responses:
         '200': { $ref: '#/components/responses/RunPage' }
         '502': { $ref: '#/components/responses/MlflowUnavailable' }
-  /experiments:
+  /evolution-steps:
     get:
-      summary: List stored experiments
+      summary: List stored Evolution Steps
       responses:
-        '200': { $ref: '#/components/responses/ExperimentList' }
+        '200': { $ref: '#/components/responses/EvolutionStepList' }
     post:
-      summary: Create an experiment and optionally attach validated Run links
+      summary: Create an Evolution Step and optionally attach validated Run links
       requestBody:
         required: true
-        content: { application/json: { schema: { $ref: '#/components/schemas/ExperimentMutation' } } }
+        content: { application/json: { schema: { $ref: '#/components/schemas/EvolutionStepCreate' } } }
       responses:
-        '201': { $ref: '#/components/responses/ExperimentDetail' }
+        '201': { $ref: '#/components/responses/EvolutionStepDetail' }
         '422': { $ref: '#/components/responses/ValidationError' }
         '409': { $ref: '#/components/responses/Conflict' }
         '502': { $ref: '#/components/responses/MlflowUnavailable' }
-  /experiments/{experimentId}:
-    parameters: [ { $ref: '#/components/parameters/ExperimentId' } ]
+  /evolution-steps/{evolutionStepId}:
+    parameters: [ { $ref: '#/components/parameters/EvolutionStepId' } ]
     get:
-      summary: Get experiment, imported Run snapshots, and ordered change history
+      summary: Get an Evolution Step, imported Run snapshots, and ordered change history
       responses:
-        '200': { $ref: '#/components/responses/ExperimentDetail' }
+        '200': { $ref: '#/components/responses/EvolutionStepDetail' }
         '404': { $ref: '#/components/responses/NotFound' }
     patch:
       summary: Update editable fields and/or current Run links atomically
       requestBody:
         required: true
-        content: { application/json: { schema: { $ref: '#/components/schemas/ExperimentPatch' } } }
+        content: { application/json: { schema: { $ref: '#/components/schemas/EvolutionStepPatch' } } }
       responses:
-        '200': { $ref: '#/components/responses/ExperimentDetail' }
+        '200': { $ref: '#/components/responses/EvolutionStepDetail' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
         '422': { $ref: '#/components/responses/ValidationError' }
         '502': { $ref: '#/components/responses/MlflowUnavailable' }
-  /experiments/{experimentId}/comparison:
-    parameters: [ { $ref: '#/components/parameters/ExperimentId' } ]
+  /evolution-steps/{evolutionStepId}/comparison:
+    parameters: [ { $ref: '#/components/parameters/EvolutionStepId' } ]
     get:
       summary: Compare current parent and result snapshots
       responses:
         '200': { $ref: '#/components/responses/Comparison' }
         '404': { $ref: '#/components/responses/NotFound' }
-  /experiments/{experimentId}/lineage:
-    parameters: [ { $ref: '#/components/parameters/ExperimentId' } ]
+  /evolution-steps/{evolutionStepId}/lineage:
+    parameters: [ { $ref: '#/components/parameters/EvolutionStepId' } ]
     get:
-      summary: Return ordered ancestors, selected experiment, and descendants
+      summary: Return ordered ancestors, selected Evolution Step, and descendants
       responses:
         '200': { $ref: '#/components/responses/Lineage' }
         '404': { $ref: '#/components/responses/NotFound' }
 components:
   parameters:
-    ExperimentId: { name: experimentId, in: path, required: true, schema: { type: integer, minimum: 1 } }
+    EvolutionStepId: { name: evolutionStepId, in: path, required: true, schema: { type: integer, minimum: 1 } }
     Query: { name: query, in: query, schema: { type: string } }
     PageToken: { name: pageToken, in: query, schema: { type: string } }
   schemas:
-    ExperimentMutation:
+    EvolutionStepCreate:
       type: object
       required: [purpose, hypothesis]
       additionalProperties: false
@@ -78,7 +78,7 @@ components:
         changeDescription: { type: [string, 'null'], minLength: 1, pattern: '\S' }
         parentRunId: { type: [string, 'null'] }
         resultRunId: { type: [string, 'null'] }
-    ExperimentPatch:
+    EvolutionStepPatch:
       type: object
       minProperties: 1
       additionalProperties: false
@@ -97,15 +97,15 @@ components:
         status: { type: [string, 'null'] }
         runName: { type: [string, 'null'] }
         importedAt: { type: string, format: date-time }
-    ExperimentList:
+    EvolutionStepList:
       type: object
       additionalProperties: false
       required: [items]
       properties:
         items:
           type: array
-          items: { $ref: '#/components/schemas/ExperimentListItem' }
-    ExperimentListItem:
+          items: { $ref: '#/components/schemas/EvolutionStepListItem' }
+    EvolutionStepListItem:
       type: object
       additionalProperties: false
       required: [id, purpose, hypothesis, parentRun, resultRun, comparisonSummary, createdAt, updatedAt]
@@ -128,7 +128,7 @@ components:
         parameterChangeCount: { type: [integer, 'null'], minimum: 0 }
         accuracy: { $ref: '#/components/schemas/AccuracyComparison' }
         datasetStatus: { type: string, enum: [changed, unchanged, unavailable] }
-    ExperimentDetail:
+    EvolutionStepDetail:
       type: object
       required: [id, purpose, hypothesis, createdAt, updatedAt, history]
       properties:
@@ -214,11 +214,11 @@ components:
       properties: { code: { type: string }, message: { type: string }, traceId: { type: string } }
   responses:
     RunPage: { description: Run candidates, content: { application/json: { schema: { type: object, additionalProperties: true } } } }
-    ExperimentList: { description: Stored experiments with compact comparison summaries, content: { application/json: { schema: { $ref: '#/components/schemas/ExperimentList' } } } }
-    ExperimentDetail: { description: Experiment detail, content: { application/json: { schema: { $ref: '#/components/schemas/ExperimentDetail' } } } }
+    EvolutionStepList: { description: Stored Evolution Steps with compact comparison summaries, content: { application/json: { schema: { $ref: '#/components/schemas/EvolutionStepList' } } } }
+    EvolutionStepDetail: { description: Evolution Step detail, content: { application/json: { schema: { $ref: '#/components/schemas/EvolutionStepDetail' } } } }
     Comparison: { description: Snapshot comparison, content: { application/json: { schema: { $ref: '#/components/schemas/Comparison' } } } }
     Lineage: { description: Ordered current lineage, content: { application/json: { schema: { $ref: '#/components/schemas/Lineage' } } } }
     Conflict: { description: Duplicate result Run, same Run links, or cyclic lineage, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
     ValidationError: { description: Invalid request, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
-    NotFound: { description: Missing experiment, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+    NotFound: { description: Missing Evolution Step, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
     MlflowUnavailable: { description: A selected Run had no saved snapshot and MLflow was unavailable or returned incomplete Run data; no new snapshot or association was saved, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
