@@ -76,6 +76,8 @@ When a terminal Run has no valid `accuracy` observation, `best_accuracy`, `best_
 
 History starts after the Evolution Step has been created. Insert one row whenever a successful user edit actually changes a supported field, including first Run attachment, later Run changes, and removals. Do not insert rows for initial creation, no-op updates that resend the current value, or operations rejected before transaction commit. Existing history is never updated or deleted by application code.
 
+The API serializes the database field names as `purpose`, `hypothesis`, `changeDescription`, `parentRunId`, or `resultRunId`. Every history response includes both `oldValue` and `newValue`; a known absence or unlink is represented by JSON `null`, not by omitting the property.
+
 ## Linking and mutation validation
 
 1. For each selected Run ID, reuse its saved Run Reference when present. When absent, retrieve the Run from MLflow before the database transaction; failure to confirm its existence rejects the link without partial changes.

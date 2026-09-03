@@ -84,7 +84,7 @@ paths:
 components:
   parameters:
     EvolutionStepId: { name: evolutionStepId, in: path, required: true, schema: { type: integer, minimum: 1 } }
-    RunId: { name: runId, in: path, required: true, schema: { type: string, minLength: 1 } }
+    RunId: { name: runId, in: path, required: true, schema: { $ref: '#/components/schemas/RunIdentifier' } }
     Query:
       name: query
       in: query
@@ -96,6 +96,11 @@ components:
       description: Opaque token returned by the previous page; reuse it only with the same endpoint and filters.
       schema: { type: string, minLength: 1 }
   schemas:
+    RunIdentifier:
+      type: string
+      minLength: 1
+      maxLength: 64
+      pattern: '^\S+$'
     EvolutionStepCreate:
       type: object
       required: [purpose, hypothesis]
@@ -104,8 +109,8 @@ components:
         purpose: { type: string, minLength: 1, pattern: '\S' }
         hypothesis: { type: string, minLength: 1, pattern: '\S' }
         changeDescription: { type: [string, 'null'], minLength: 1, pattern: '\S' }
-        parentRunId: { type: [string, 'null'] }
-        resultRunId: { type: [string, 'null'] }
+        parentRunId: { anyOf: [ { $ref: '#/components/schemas/RunIdentifier' }, { type: 'null' } ] }
+        resultRunId: { anyOf: [ { $ref: '#/components/schemas/RunIdentifier' }, { type: 'null' } ] }
     EvolutionStepPatch:
       type: object
       minProperties: 1
@@ -115,8 +120,8 @@ components:
         purpose: { type: string, minLength: 1, pattern: '\S' }
         hypothesis: { type: string, minLength: 1, pattern: '\S' }
         changeDescription: { type: [string, 'null'], minLength: 1, pattern: '\S' }
-        parentRunId: { type: [string, 'null'] }
-        resultRunId: { type: [string, 'null'] }
+        parentRunId: { anyOf: [ { $ref: '#/components/schemas/RunIdentifier' }, { type: 'null' } ] }
+        resultRunId: { anyOf: [ { $ref: '#/components/schemas/RunIdentifier' }, { type: 'null' } ] }
     RunCandidatePage:
       type: object
       additionalProperties: false
@@ -132,7 +137,7 @@ components:
       additionalProperties: false
       required: [runId, runName, mlflowExperimentId, mlflowExperimentName, status, startedAt, endedAt]
       properties:
-        runId: { type: string }
+        runId: { $ref: '#/components/schemas/RunIdentifier' }
         runName: { type: [string, 'null'] }
         mlflowExperimentId: { type: string }
         mlflowExperimentName: { type: string }
@@ -144,7 +149,7 @@ components:
       additionalProperties: false
       required: [runId, runName, currentStatus, startedAt, endedAt, lastSyncedAt, snapshotState, snapshotCapturedAt]
       properties:
-        runId: { type: string }
+        runId: { $ref: '#/components/schemas/RunIdentifier' }
         runName: { type: [string, 'null'] }
         currentStatus: { type: string, enum: [RUNNING, SCHEDULED, FINISHED, FAILED, KILLED] }
         startedAt: { type: [string, 'null'], format: date-time }
@@ -211,7 +216,7 @@ components:
       additionalProperties: false
       required: [runId, statusAtCapture, startedAt, endedAt, bestAccuracy, bestAccuracyStep, bestAccuracyRecordedAt, capturedAt, parameters, datasets]
       properties:
-        runId: { type: string }
+        runId: { $ref: '#/components/schemas/RunIdentifier' }
         statusAtCapture: { type: string, enum: [FINISHED, FAILED, KILLED] }
         startedAt: { type: [string, 'null'], format: date-time }
         endedAt: { type: [string, 'null'], format: date-time }
@@ -232,7 +237,7 @@ components:
       additionalProperties: false
       required: [runId, status, unavailableReason, bestAccuracy, bestAccuracyStep, bestAccuracyRecordedAt, items]
       properties:
-        runId: { type: string }
+        runId: { $ref: '#/components/schemas/RunIdentifier' }
         status: { type: string, enum: [available, unavailable] }
         unavailableReason: { type: [string, 'null'] }
         bestAccuracy: { type: [number, 'null'], minimum: 0, maximum: 1, description: Maximum accuracy after same-key same-step observations are canonicalized }
@@ -250,8 +255,15 @@ components:
         recordedAt: { type: string, format: date-time, description: Greatest timestamp selected for this Metric name and step }
     HistoryEntry:
       type: object
-      required: [field, changedAt]
-      properties: { field: { type: string }, oldValue: { type: [string, 'null'] }, newValue: { type: [string, 'null'] }, changedAt: { type: string, format: date-time } }
+      additionalProperties: false
+      required: [field, oldValue, newValue, changedAt]
+      properties:
+        field:
+          type: string
+          enum: [purpose, hypothesis, changeDescription, parentRunId, resultRunId]
+        oldValue: { type: [string, 'null'] }
+        newValue: { type: [string, 'null'] }
+        changedAt: { type: string, format: date-time }
     ParameterDifference:
       type: object
       additionalProperties: false
