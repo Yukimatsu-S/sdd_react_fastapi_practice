@@ -42,3 +42,4 @@
 - Re-validated on 2026-09-03 after limiting stored and displayed Metrics to the smallest step with maximum accuracy, defining tie behavior, and separating lazy best-step Metric loading from full histories. All 16 checks pass.
 - Re-validated on 2026-09-03 after defining the order for canonicalizing duplicate same-Metric same-step observations before selecting the best-accuracy step. All 16 checks pass.
 - Re-validated on 2026-09-03 after defining fixed-size cursor pagination and stable ordering for the Evolution Step list. All 16 checks pass.
+- Re-validated on 2026-09-03 after defining the post-creation history boundary and excluding initial, no-op, and rejected operations from change history. All 16 checks pass.

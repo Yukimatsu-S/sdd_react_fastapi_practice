@@ -74,7 +74,7 @@ When a terminal Run has no valid `accuracy` observation, `best_accuracy`, `best_
 | `new_value` | text nullable | `NULL` records unlinking |
 | `changed_at` | datetime(6) | UTC; list ascending |
 
-History is inserted whenever a user edit changes a supported field, including Run changes and removals. It is never updated or deleted by application code.
+History starts after the Evolution Step has been created. Insert one row whenever a successful user edit actually changes a supported field, including first Run attachment, later Run changes, and removals. Do not insert rows for initial creation, no-op updates that resend the current value, or operations rejected before transaction commit. Existing history is never updated or deleted by application code.
 
 ## Linking and mutation validation
 
