@@ -19,7 +19,7 @@ paths:
     get:
       summary: List stored experiments
       responses:
-        '200': { $ref: '#/components/responses/ExperimentPage' }
+        '200': { $ref: '#/components/responses/ExperimentList' }
     post:
       summary: Create an experiment and optionally attach validated Run links
       requestBody:
@@ -44,6 +44,7 @@ paths:
         content: { application/json: { schema: { $ref: '#/components/schemas/ExperimentPatch' } } }
       responses:
         '200': { $ref: '#/components/responses/ExperimentDetail' }
+        '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
         '422': { $ref: '#/components/responses/ValidationError' }
         '502': { $ref: '#/components/responses/MlflowUnavailable' }
@@ -96,6 +97,37 @@ components:
         status: { type: [string, 'null'] }
         runName: { type: [string, 'null'] }
         importedAt: { type: string, format: date-time }
+    ExperimentList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/ExperimentListItem' }
+    ExperimentListItem:
+      type: object
+      additionalProperties: false
+      required: [id, purpose, hypothesis, parentRun, resultRun, comparisonSummary, createdAt, updatedAt]
+      properties:
+        id: { type: integer }
+        purpose: { type: string }
+        hypothesis: { type: string }
+        parentRun: { anyOf: [ { $ref: '#/components/schemas/RunSummary' }, { type: 'null' } ] }
+        resultRun: { anyOf: [ { $ref: '#/components/schemas/RunSummary' }, { type: 'null' } ] }
+        comparisonSummary: { $ref: '#/components/schemas/ComparisonSummary' }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    ComparisonSummary:
+      type: object
+      additionalProperties: false
+      required: [status, unavailableReason, parameterChangeCount, accuracy, datasetStatus]
+      properties:
+        status: { type: string, enum: [available, unavailable] }
+        unavailableReason: { type: [string, 'null'] }
+        parameterChangeCount: { type: [integer, 'null'], minimum: 0 }
+        accuracy: { $ref: '#/components/schemas/AccuracyComparison' }
+        datasetStatus: { type: string, enum: [changed, unchanged, unavailable] }
     ExperimentDetail:
       type: object
       required: [id, purpose, hypothesis, createdAt, updatedAt, history]
@@ -123,15 +155,53 @@ components:
       type: object
       required: [field, changedAt]
       properties: { field: { type: string }, oldValue: { type: [string, 'null'] }, newValue: { type: [string, 'null'] }, changedAt: { type: string, format: date-time } }
-    Comparison:
+    ParameterDifference:
       type: object
-      required: [status]
+      additionalProperties: false
+      required: [name, status, parentValue, resultValue]
+      properties:
+        name: { type: string }
+        status: { type: string, enum: [added, changed, removed] }
+        parentValue: { type: [string, 'null'] }
+        resultValue: { type: [string, 'null'] }
+    AccuracyComparison:
+      type: object
+      additionalProperties: false
+      required: [status, unavailableReason, parentBest, resultBest, delta]
       properties:
         status: { type: string, enum: [available, unavailable] }
         unavailableReason: { type: [string, 'null'] }
-        parameters: { type: object, additionalProperties: true }
-        accuracy: { type: object, additionalProperties: true }
-        datasets: { type: array, items: { type: object, additionalProperties: true } }
+        parentBest: { type: [number, 'null'], minimum: 0, maximum: 1 }
+        resultBest: { type: [number, 'null'], minimum: 0, maximum: 1 }
+        delta: { type: [number, 'null'], minimum: -1, maximum: 1 }
+    DatasetIdentifier:
+      type: object
+      additionalProperties: false
+      required: [ordinal, name, digest, sourceType, sourceUri]
+      properties:
+        ordinal: { type: integer, minimum: 0 }
+        name: { type: [string, 'null'] }
+        digest: { type: [string, 'null'] }
+        sourceType: { type: [string, 'null'] }
+        sourceUri: { type: [string, 'null'] }
+    DatasetComparison:
+      type: object
+      additionalProperties: false
+      required: [status, parent, result]
+      properties:
+        status: { type: string, enum: [changed, unchanged, unavailable] }
+        parent: { type: array, items: { $ref: '#/components/schemas/DatasetIdentifier' } }
+        result: { type: array, items: { $ref: '#/components/schemas/DatasetIdentifier' } }
+    Comparison:
+      type: object
+      additionalProperties: false
+      required: [status, unavailableReason, parameters, accuracy, datasets]
+      properties:
+        status: { type: string, enum: [available, unavailable] }
+        unavailableReason: { type: [string, 'null'] }
+        parameters: { type: array, items: { $ref: '#/components/schemas/ParameterDifference' } }
+        accuracy: { $ref: '#/components/schemas/AccuracyComparison' }
+        datasets: { $ref: '#/components/schemas/DatasetComparison' }
     Lineage:
       type: object
       required: [ancestors, descendants]
@@ -144,7 +214,7 @@ components:
       properties: { code: { type: string }, message: { type: string }, traceId: { type: string } }
   responses:
     RunPage: { description: Run candidates, content: { application/json: { schema: { type: object, additionalProperties: true } } } }
-    ExperimentPage: { description: Stored experiment page, content: { application/json: { schema: { type: object, additionalProperties: true } } } }
+    ExperimentList: { description: Stored experiments with compact comparison summaries, content: { application/json: { schema: { $ref: '#/components/schemas/ExperimentList' } } } }
     ExperimentDetail: { description: Experiment detail, content: { application/json: { schema: { $ref: '#/components/schemas/ExperimentDetail' } } } }
     Comparison: { description: Snapshot comparison, content: { application/json: { schema: { $ref: '#/components/schemas/Comparison' } } } }
     Lineage: { description: Ordered current lineage, content: { application/json: { schema: { $ref: '#/components/schemas/Lineage' } } } }

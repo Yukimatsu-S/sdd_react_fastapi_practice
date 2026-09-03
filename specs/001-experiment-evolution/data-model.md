@@ -71,7 +71,7 @@ An experiment may be created without either Run. A parent-only experiment makes 
 
 ## Derived views
 
-- **Experiment list**: experiment ID, purpose excerpt, hypothesis excerpt, parent/result Run summary, timestamps.
+- **Experiment list**: experiment ID, purpose, hypothesis, parent/result Run summary, timestamps, and a compact comparison summary. The summary reports comparison availability, Parameter change count, best parent/result `accuracy` and delta when available, and dataset status as changed, unchanged, or unavailable. It does not include the full Parameter or dataset differences.
 - **Detail**: current experiment fields, both snapshots, all Parameters, all metric observations, dataset inputs, ordered history.
-- **Comparison**: only when both current Run links exist. Parameters are unioned by name. `accuracy` is available only if both snapshots contain it; best values are `MAX(metric_observation.value WHERE name = 'accuracy')` and `$delta = result - parent$`.
+- **Comparison**: only when both current Run links exist. Return only added, changed, or removed Parameters from the union of names. `accuracy` is available only if both snapshots contain values in the specified 0-to-1 range; best values are `MAX(metric_observation.value WHERE name = 'accuracy')` and `$delta = result - parent$`. Persist and return these ratios unchanged; the frontend formats best values as percentages and the delta as percentage points. Dataset comparison returns the status separately from the available parent/result identifiers so unchanged and unavailable are distinguishable.
 - **Lineage**: traverse reverse ownership (`result_run_id = current parent`) for ancestors until no owner, then show an external Run root; traverse `parent_run_id = current result` breadth-first for descendants. Include only current links and stable order by experiment ID.
