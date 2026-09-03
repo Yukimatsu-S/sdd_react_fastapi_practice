@@ -37,3 +37,4 @@
 - Re-validated on 2026-09-03 after naming the product Mondel and replacing the application-owned Experiment term with Evolution Step. MLflow Experiment remains the external grouping term, while Lineage means the graph derived from connected Evolution Steps. All 16 checks pass.
 - Re-validated on 2026-09-03 after separating immediately saved Run References from terminal-state Run Snapshots, allowing active Runs to be linked, and defining automatic detail-page synchronization and failure behavior. All 16 checks pass.
 - Re-validated on 2026-09-03 after defining Run candidate fields, stable ordering, search filters, and token-based pagination. All 16 checks pass.
+- Re-validated on 2026-09-03 after defining Dataset Input matching, difference labels, unavailable states, and the boundary between metadata comparison and row-level data comparison. All 16 checks pass.

@@ -32,9 +32,9 @@
 
 ## Differences
 
-- **Decision**: Treat Parameters as string key/value maps. For the union of keys, return `added` when only the result contains a key, `removed` when only the parent contains it, and `changed` when both values differ. For metric key exactly `accuracy`, calculate each Run's `max(value)` from all stored observations and return `$resultMax - parentMax$`; return an explicit unavailable reason if either history is missing. Compare dataset identifier fields supplied by MLflow as equal, different, or unavailable.
-- **Rationale**: This directly implements FR-012, FR-014, FR-015, and FR-016 without inferring optimization direction for other metrics.
-- **Alternatives considered**: Comparing latest accuracy would produce the wrong result for non-monotonic training. General metric selection or min/max heuristics are explicitly out of scope.
+- **Decision**: Treat Parameters as string key/value maps. For the union of keys, return `added` when only the result contains a key, `removed` when only the parent contains it, and `changed` when both values differ. For metric key exactly `accuracy`, calculate each Run's `max(value)` from all stored observations and return `$resultMax - parentMax$`; return an explicit unavailable reason if either history is missing. Pair Dataset Inputs by `(context, name)` when that key is unique within each Run. For a pair, compare `digest`, `sourceType`, and `source`; return only differing pairs as `changed`, unmatched recorded inputs as `parent_only` or `result_only`, and omit unchanged pairs. Mark the Dataset comparison unavailable when either Run has no Dataset Inputs or a duplicate pairing key makes the mapping ambiguous.
+- **Rationale**: This directly implements FR-012, FR-014, FR-015, and FR-016 without inferring optimization direction for other metrics. Dataset terms describe differences between MLflow input records and avoid claiming row-level additions or removals that cannot be derived from metadata alone.
+- **Alternatives considered**: Comparing latest accuracy would produce the wrong result for non-monotonic training. General metric selection or min/max heuristics are explicitly out of scope. Pairing Dataset Inputs by capture order was rejected because order is not a stable identity. Treating an unmatched input as rows added or removed was rejected because a digest indicates that data differs but does not identify individual row changes.
 
 ## API and frontend state
 

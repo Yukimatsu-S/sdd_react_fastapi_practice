@@ -206,7 +206,7 @@ components:
         capturedAt: { type: string, format: date-time }
         parameters: { type: object, additionalProperties: { type: string } }
         metrics: { type: object, additionalProperties: { type: array, items: { $ref: '#/components/schemas/MetricObservation' } } }
-        datasets: { type: array, items: { type: object, additionalProperties: true } }
+        datasets: { type: array, items: { $ref: '#/components/schemas/DatasetInputSnapshot' } }
     RunSyncResult:
       type: object
       additionalProperties: false
@@ -240,24 +240,49 @@ components:
         parentBest: { type: [number, 'null'], minimum: 0, maximum: 1 }
         resultBest: { type: [number, 'null'], minimum: 0, maximum: 1 }
         delta: { type: [number, 'null'], minimum: -1, maximum: 1 }
+    DatasetInputSnapshot:
+      type: object
+      additionalProperties: false
+      required: [ordinal, name, digest, sourceType, source, schema, profile, context]
+      properties:
+        ordinal: { type: integer, minimum: 0 }
+        name: { type: string }
+        digest: { type: string }
+        sourceType: { type: string }
+        source: { type: string }
+        schema: { type: [string, 'null'] }
+        profile: { type: [string, 'null'] }
+        context: { type: [string, 'null'] }
     DatasetIdentifier:
       type: object
       additionalProperties: false
-      required: [ordinal, name, digest, sourceType, sourceUri]
+      required: [name, digest, sourceType, source, context]
       properties:
-        ordinal: { type: integer, minimum: 0 }
-        name: { type: [string, 'null'] }
-        digest: { type: [string, 'null'] }
-        sourceType: { type: [string, 'null'] }
-        sourceUri: { type: [string, 'null'] }
+        name: { type: string }
+        digest: { type: string }
+        sourceType: { type: string }
+        source: { type: string }
+        context: { type: [string, 'null'] }
+    DatasetDifference:
+      type: object
+      additionalProperties: false
+      required: [status, parent, result, changedFields]
+      description: A difference between recorded Dataset Inputs; it does not describe row-level additions or deletions.
+      properties:
+        status: { type: string, enum: [changed, parent_only, result_only] }
+        parent: { anyOf: [ { $ref: '#/components/schemas/DatasetIdentifier' }, { type: 'null' } ] }
+        result: { anyOf: [ { $ref: '#/components/schemas/DatasetIdentifier' }, { type: 'null' } ] }
+        changedFields:
+          type: array
+          items: { type: string, enum: [digest, sourceType, source] }
     DatasetComparison:
       type: object
       additionalProperties: false
-      required: [status, parent, result]
+      required: [status, unavailableReason, differences]
       properties:
         status: { type: string, enum: [changed, unchanged, unavailable] }
-        parent: { type: array, items: { $ref: '#/components/schemas/DatasetIdentifier' } }
-        result: { type: array, items: { $ref: '#/components/schemas/DatasetIdentifier' } }
+        unavailableReason: { type: [string, 'null'] }
+        differences: { type: array, items: { $ref: '#/components/schemas/DatasetDifference' } }
     Comparison:
       type: object
       additionalProperties: false
