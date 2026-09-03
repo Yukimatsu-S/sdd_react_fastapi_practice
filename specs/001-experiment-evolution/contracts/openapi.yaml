@@ -295,10 +295,36 @@ components:
         datasets: { $ref: '#/components/schemas/DatasetComparison' }
     Lineage:
       type: object
-      required: [ancestors, descendants]
+      additionalProperties: false
+      required: [selected, ancestors, descendants]
       properties:
-        ancestors: { type: array, items: { type: object, additionalProperties: true } }
-        descendants: { type: array, items: { type: object, additionalProperties: true } }
+        selected: { $ref: '#/components/schemas/LineageStep' }
+        ancestors:
+          type: array
+          description: All ancestors ordered from the nearest to the farthest from the selected Evolution Step.
+          items: { $ref: '#/components/schemas/LineageStep' }
+        descendants:
+          type: array
+          description: All descendants ordered by distance from the selected Evolution Step, then by Evolution Step ID.
+          items: { $ref: '#/components/schemas/LineageStep' }
+    LineageStep:
+      type: object
+      additionalProperties: false
+      required: [id, purpose, hypothesis, parentEvolutionStepId, distanceFromSelected, parentRun, resultRun]
+      properties:
+        id: { type: integer, minimum: 1 }
+        purpose: { type: string }
+        hypothesis: { type: string }
+        parentEvolutionStepId:
+          type: [integer, 'null']
+          minimum: 1
+          description: Evolution Step whose result Run is this Step's parent Run; null when the parent Run is absent or is an unregistered upstream boundary.
+        distanceFromSelected:
+          type: integer
+          minimum: 0
+          description: Zero for the selected Evolution Step and one or greater for an ancestor or descendant.
+        parentRun: { anyOf: [ { $ref: '#/components/schemas/RunSummary' }, { type: 'null' } ] }
+        resultRun: { anyOf: [ { $ref: '#/components/schemas/RunSummary' }, { type: 'null' } ] }
     Error:
       type: object
       required: [code, message, traceId]

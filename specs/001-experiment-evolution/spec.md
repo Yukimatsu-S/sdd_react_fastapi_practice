@@ -34,6 +34,7 @@
 - Q: 学習中のRunを紐付けた場合、Snapshotをいつ確定しますか？ → A: Runの参照関係は学習中でも保存し、Snapshotを未確定として表示する。Evolution Step詳細を開いた時に対象Runの状態を自動確認し、RunがFINISHED、FAILED、またはKILLEDの終了状態なら、その時点のParameters、Metrics、データセット識別情報などを一度だけ取り込んでSnapshotを確定する。RUNNINGまたはSCHEDULEDなら未確定のままとする。確定後のSnapshotは更新せず、Run名と現在状態だけを表示情報として同期する。
 - Q: アプリ内で選択するRun候補は、どのように検索・表示しますか？ → A: MLflowの有効なExperimentに属する削除されていないRunを、開始日時の新しい順で20件ずつ取得する。候補にはRun ID、Run名、MLflow ExperimentのIDと名前、状態、開始日時、終了日時を表示する。Run名の大文字小文字を区別しない部分一致で検索でき、同名RunはRun IDで区別する。
 - Q: Dataset Inputの差分は、どの単位と表現で示しますか？ → A: 用途と名前が同じDataset Inputを対応付け、digestまたは取得済みのsource識別情報が異なる場合は`changed`とする。片方にだけ対応候補がある場合は`parent_only`または`result_only`とし、データ行の追加・削除を意味する`added`または`removed`とは表現しない。いずれかのRunにDataset Inputが一件も記録されていない場合は比較情報なしとする。
+- Q: Lineageは、選択したEvolution Stepを基準にどの順序と境界で表示しますか？ → A: 選択したEvolution Stepを中心とし、祖先と子孫をそれぞれ直近の世代から外側へ表示する。同じ世代の子孫はEvolution Step ID順とする。派生元Runが未設定ならそのStepより上流は存在せず、派生元Runが設定されていてもそれを実行結果とするEvolution Stepが登録されていなければ、そのRunを追跡可能範囲の上流境界として表示する。
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -112,7 +113,7 @@
 
 ### User Story 4 - Lineageを確認する (Priority: P4)
 
-機械学習モデルを改善する開発者として、選択したEvolution Stepに至るすべての祖先と、そこから派生したすべての子孫を確認したい。改善の流れを起点から末端まで追跡するためである。
+機械学習モデルを改善する開発者として、選択したEvolution Stepを中心に、そこへ至るすべての祖先と、そこから派生したすべての子孫を確認したい。改善の流れを両方向へ追跡するためである。
 
 **Why this priority**: 個々の比較だけでは見えない改善の経緯を把握できるが、Lineageを構成するEvolution Stepがあることを前提とするためである。
 
@@ -120,10 +121,10 @@
 
 **Acceptance Scenarios**:
 
-1. **Given** 複数世代にわたるLineageを持つEvolution Stepが登録済みの状態、**When** 開発者が任意のEvolution StepのLineageを確認する、**Then** 起点から当該Evolution Stepまでのすべての祖先を派生順序とともに確認できる。
-2. **Given** 複数世代にわたるLineageを持つEvolution Stepが登録済みの状態、**When** 開発者が任意のEvolution StepのLineageを確認する、**Then** 当該Evolution Stepから派生したすべての子孫を派生順序とともに確認できる。
+1. **Given** 複数世代にわたるLineageを持つEvolution Stepが登録済みの状態、**When** 開発者が任意のEvolution StepのLineageを確認する、**Then** 当該Evolution Stepを中心として、すべての祖先を直近の世代から上流へ確認できる。
+2. **Given** 複数世代にわたる枝分かれしたLineageが登録済みの状態、**When** 開発者が任意のEvolution StepのLineageを確認する、**Then** すべての子孫を直近の世代から下流へ確認でき、同じ世代の分岐と各子孫の直前のEvolution Stepを識別できる。
 3. **Given** 派生元を持たないEvolution Stepを開いている状態、**When** 開発者がLineageを確認する、**Then** そのEvolution Stepが起点であることを確認できる。
-4. **Given** アプリ内のEvolution Stepに実行結果として紐付いていないMLflow Runを派生元とするEvolution Stepがある状態、**When** 利用者がそのEvolution StepのLineageを確認する、**Then** 当該Runが外部起点として表示され、それ以降の子孫を派生順序とともに確認できる。
+4. **Given** Mondel内のEvolution Stepに実行結果として紐付いていないMLflow Runを派生元とするEvolution Stepがある状態、**When** 利用者がそのEvolution StepのLineageを確認する、**Then** 当該Runが追跡可能範囲の上流境界として表示され、それより前のEvolution Stepが登録されていないことを確認できる。
 
 ### Edge Cases
 
@@ -164,7 +165,7 @@
 - **FR-014**: システムは、派生元Runと実行結果Runの両方にaccuracyが記録されている場合、各Runの最大accuracyを最良accuracyとして百分率で表示し、実行結果Runの最良accuracyから派生元Runの最良accuracyを引いた増減をパーセントポイントで表示しなければならない。保存する値はMLflowから取得した0以上1以下の比率を維持しなければならない。
 - **FR-015**: システムは、accuracy以外の評価指標について、最大化・最小化の判定、最良値の自動選択、および自動的な結果差分の算出を行ってはならない。利用者が比較対象の評価指標を選択する機能も提供してはならない。
 - **FR-016**: システムは、派生元Runが指定されたEvolution Stepについて、用途と名前が同じDataset Inputを対応付け、digestおよび取得済みのsource識別情報を比較しなければならない。識別情報が異なる対応候補は`changed`、派生元Runだけにある候補は`parent_only`、実行結果Runだけにある候補は`result_only`として差分だけを表示し、これらをDataset内のデータ行の追加・削除として表現してはならない。いずれかのRunにDataset Inputが一件も記録されていない場合は、変更なしではなく比較情報なしとして表示しなければならない。
-- **FR-017**: システムは、利用者が選択したEvolution Stepについて、起点から当該Evolution Stepまでのすべての祖先と、当該Evolution Stepから派生したすべての子孫を、派生順序が分かるLineageとして確認できるようにしなければならない。アプリ内のEvolution Stepの実行結果Runでない派生元Runは外部起点として表示し、それより前の祖先探索を終了しなければならない。
+- **FR-017**: システムは、利用者が選択したEvolution Stepを中心として、すべての祖先と子孫をそれぞれ直近の世代から外側へ確認できるようにしなければならない。各Evolution Stepについて選択対象からの距離と直前のEvolution Stepを識別できるようにし、同じ世代の子孫はEvolution Step IDの昇順で表示しなければならない。派生元Runが未設定なら上流探索を終了し、派生元Runを実行結果とするEvolution Stepが登録されていない場合は、そのRunを追跡可能範囲の上流境界として表示して探索を終了しなければならない。
 - **FR-018**: システムは、Evolution Step、関連するRun情報、実測条件、評価指標、データセット識別情報、変更内容、変更履歴、およびLineageを利用終了後も保持し、後から再確認できるようにしなければならない。
 - **FR-019**: システムは、派生元がない、実行結果Runが未設定である、Snapshotが未確定である、accuracyが記録されていない、比較可能な情報が不足している、またはMLflowからRun情報を取得できない場合に、その状態と理由を利用者に明確に示さなければならない。
 - **FR-020**: システムは、利用者がEvolution Stepの目的、仮説、および変更内容をいつでも編集し、任意の変更内容を未設定へ戻せるようにしなければならない。編集後の目的、仮説、および入力済みの変更内容は、空白以外の文字を1文字以上含まなければならない。
@@ -189,7 +190,7 @@
 - **実測条件**: MLflowに記録された、実行済みRunの名前と値を持つ条件。取得できるすべてを表示し、派生元との差分として追加、変更、削除を識別できる。
 - **評価指標**: MLflowから取得する、学習結果を評価する名前と値を持つ測定値。取得できるすべてを表示する。自動結果差分はaccuracyだけを対象とし、accuracy以外の最良値は自動選択しない。
 - **Dataset Input／データセット識別情報**: Runで使用したDatasetとその用途をMLflowへ記録した入力情報、およびDatasetの名前、digest、sourceなどの識別情報。比較結果はRun間の記録と識別情報の相違を示し、Dataset内のデータ行単位の増減は示さない。
-- **Lineage**: 複数のEvolution StepをRunの派生関係で結んだ、循環のない系譜。起点から選択したEvolution Stepまでの祖先、および選択したEvolution Stepから末端までの子孫を、派生順序に沿ってたどるために用いる。保存済みの現在の紐付けから導出し、アプリ内のEvolution Stepの実行結果Runでない派生元Runは外部起点とする。
+- **Lineage**: 複数のEvolution StepをRunの派生関係で結んだ、循環のない系譜。選択したEvolution Stepを中心として、祖先方向と子孫方向へ世代順にたどるために用いる。保存済みの現在の紐付けから導出し、派生元Runを実行結果とするEvolution Stepが登録されていない場合は、そのRunを追跡可能範囲の上流境界とする。
 - **変更履歴**: Evolution Stepの目的、仮説、変更内容、派生元Run、または実行結果Runの各編集について、変更対象、変更前と変更後の内容またはRun、編集日時を表す記録。Runの解除では変更後のRunを未設定として記録する。
 
 ## Success Criteria *(mandatory)*
@@ -227,9 +228,9 @@
 - 一つの結果Runは、複数の後続Evolution Stepから派生元として参照できるため、Lineageは枝分かれできる。
 - Runの新規登録、変更、解除では、一つのRunを複数のEvolution Stepの実行結果として紐付けず、同じRunを同じEvolution Stepの派生元Runと実行結果Runの両方に指定せず、Lineageに循環を生じさせない。違反する操作は拒否し、理由を利用者に示す。
 - 派生元Runと実行結果RunはEvolution Step登録後も変更または解除できる。Runの変更・解除はEvolution Stepの削除ではなくUpdateとして扱い、変更対象、変更前後のRun、変更日時を全履歴として保持する。変更後は現在の紐付けでLineageを再構成する。
-- Runの変更・解除は対象のEvolution Stepだけに適用し、他のEvolution Stepの派生元Runまたは実行結果Runを自動変更しない。実行結果RunでなくなったRunは、必要に応じてLineage上の外部起点として扱う。
+- Runの変更・解除は対象のEvolution Stepだけに適用し、他のEvolution Stepの派生元Runまたは実行結果Runを自動変更しない。実行結果RunでなくなったRunは、必要に応じてLineage上の上流境界Runとして扱う。
 - Evolution Stepの目的、仮説、変更内容はいつでも編集できる。各編集の対象項目、編集前と編集後の内容、編集日時を変更履歴として保持し、編集日時順に確認できる。
 - 実測条件の差分は、条件名と値を比較して追加、変更、削除として扱う。accuracy差分は、実行結果Runの最良accuracyから派生元Runの最良accuracyを引いて算出する。
-- Lineageは、起点から選択したEvolution Stepまでのすべての祖先と、選択したEvolution Stepから末端までのすべての子孫を、派生順序が分かる一覧として確認する範囲とし、グラフィカルな可視化は含めない。
+- Lineageは、選択したEvolution Stepを中心に、すべての祖先と子孫を直近の世代から外側へ広がる一覧として確認する範囲とし、グラフィカルな可視化は含めない。
 - Decision、Reason、Next Actionの管理、全体状況を集約するDashboard、本番環境への自動配備、環境構築の自動化、高度な画面改善は初期MVPに含めない。
 - MLflow Run状態を常時監視するバックグラウンド処理は初期MVPに含めない。Run状態の確認とSnapshot確定はEvolution Step詳細の表示を契機として行う。

@@ -38,3 +38,4 @@
 - Re-validated on 2026-09-03 after separating immediately saved Run References from terminal-state Run Snapshots, allowing active Runs to be linked, and defining automatic detail-page synchronization and failure behavior. All 16 checks pass.
 - Re-validated on 2026-09-03 after defining Run candidate fields, stable ordering, search filters, and token-based pagination. All 16 checks pass.
 - Re-validated on 2026-09-03 after defining Dataset Input matching, difference labels, unavailable states, and the boundary between metadata comparison and row-level data comparison. All 16 checks pass.
+- Re-validated on 2026-09-03 after defining the selected-centered Lineage order, branch relationships, and the distinction between an absent parent and an unregistered upstream boundary Run. All 16 checks pass.
