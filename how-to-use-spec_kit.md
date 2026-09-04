@@ -6,7 +6,8 @@
 1. constitutionの作成
 2. specificationの作成
 3. planの作成
-
+4. tasksの作成
+5. analyzeの実行
 
 ## GitHub spec-kit の概念
 spec-kit の中身は概念として以下のようなトップダウン関係がある
@@ -24,6 +25,8 @@ Specification                   # 何を作るかの仕様定義
 Plan                            # specification で定義した仕様をどう実現するか
     ↓
 Tasks                           # Planを実作業単位まで分解したもの
+    ↓
+Analyze                         # 成果物間の矛盾・不足を実装前に確認
     ↓
 Implementation                  # 実装
 ```
@@ -129,3 +132,23 @@ Specificationおよび生成物間の矛盾・不足を修正
 > Plan確認中に製品の振る舞いに関する判断が必要になった場合はSpecificationへ反映し、実現方法に関する判断はPlanへ記載する。
 
 > 生成されたMarkdownは直接修正してよい。ただし、後続のTasksや実装の前提になるため、関連する成果物もあわせて更新する。理解・説明できない設計をそのまま確定しない。
+
+
+## tasks の作成
+VS Code のチャット機能を使用する
+
+チャット欄に以下を入力し、必要に応じて採用技術や制約を自然言語で補足する
+
+```txt
+/speckit-tasks
+```
+
+## analyze の実行
+
+Tasks作成後、VS Codeのチャット欄に以下を入力する。
+
+```txt
+/speckit-analyze
+```
+
+Constitution、Specification、Plan、Tasks間の矛盾、曖昧さ、要件やTaskの不足を実装前に確認する。Analyzeはファイルを変更せず、結果をレポートとして出力する。指摘内容を確認して必要な修正を行い、問題が解消されたらImplementationへ進む。
