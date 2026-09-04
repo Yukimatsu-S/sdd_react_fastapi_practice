@@ -100,7 +100,7 @@ The API serializes the database field names as `purpose`, `hypothesis`, `changeD
 ## Run synchronization
 
 1. `POST /runs/{runId}/sync` requires an existing Run Reference and retrieves the current MLflow Run outside the database transaction.
-2. If the Snapshot is pending and the Run is terminal, retrieve all Parameters and dataset inputs, select the maximum accuracy at the smallest step, and prepare only Metric values recorded at that step before opening the transaction. If it is still active, retrieve only current reference metadata.
+2. If the Snapshot is pending and the Run is terminal, retrieve all Parameters, Metric histories, and dataset inputs. Canonicalize Metric observations by `(name, step)`, retaining the greatest timestamp and then the greatest numeric value when timestamps tie. Select the maximum canonical accuracy and, when it occurs at multiple steps, the smallest step; prepare only canonical Metric values recorded at that exact step before opening the transaction. If the Run is still active, retrieve only current reference metadata.
 3. In a short transaction, lock the Run Reference, update its mutable display metadata, and insert the Snapshot and child rows only when no Snapshot exists. A concurrent request that captured it first wins; the later request returns the stored Snapshot without replacing it.
 4. If MLflow retrieval fails, return `502` and leave the Run Reference and Snapshot state unchanged. The frontend retains the local detail already displayed and shows a synchronization warning.
 
