@@ -183,13 +183,49 @@ components:
     ComparisonSummary:
       type: object
       additionalProperties: false
-      required: [status, unavailableReason, parameterChangeCount, accuracy, datasetStatus]
+      required: [status, unavailableReason, parameterChangeCount, accuracy, datasetStatus, datasetUnavailableReason]
       properties:
         status: { type: string, enum: [available, unavailable] }
-        unavailableReason: { type: [string, 'null'] }
+        unavailableReason:
+          anyOf:
+            - $ref: '#/components/schemas/ComparisonUnavailableReason'
+            - { type: 'null' }
         parameterChangeCount: { type: [integer, 'null'], minimum: 0 }
         accuracy: { $ref: '#/components/schemas/AccuracyComparison' }
         datasetStatus: { type: string, enum: [changed, unchanged, unavailable] }
+        datasetUnavailableReason:
+          anyOf:
+            - $ref: '#/components/schemas/DatasetUnavailableReason'
+            - { type: 'null' }
+      allOf:
+        - oneOf:
+            - title: Snapshot comparison summary available
+              properties:
+                status: { const: available }
+                unavailableReason: { type: 'null' }
+                parameterChangeCount: { type: integer, minimum: 0 }
+            - title: Snapshot comparison summary unavailable
+              properties:
+                status: { const: unavailable }
+                unavailableReason: { $ref: '#/components/schemas/ComparisonUnavailableReason' }
+                parameterChangeCount: { type: 'null' }
+                accuracy:
+                  allOf:
+                    - $ref: '#/components/schemas/AccuracyComparison'
+                    - properties:
+                        status: { const: unavailable }
+                        unavailableReason: { const: comparison_unavailable }
+                datasetStatus: { const: unavailable }
+                datasetUnavailableReason: { const: comparison_unavailable }
+        - oneOf:
+            - title: Dataset Input summary available
+              properties:
+                datasetStatus: { enum: [changed, unchanged] }
+                datasetUnavailableReason: { type: 'null' }
+            - title: Dataset Input summary unavailable
+              properties:
+                datasetStatus: { const: unavailable }
+                datasetUnavailableReason: { $ref: '#/components/schemas/DatasetUnavailableReason' }
     EvolutionStepDetail:
       type: object
       additionalProperties: false
@@ -239,11 +275,34 @@ components:
       properties:
         runId: { $ref: '#/components/schemas/RunIdentifier' }
         status: { type: string, enum: [available, unavailable] }
-        unavailableReason: { type: [string, 'null'] }
+        unavailableReason:
+          anyOf:
+            - $ref: '#/components/schemas/BestStepMetricsUnavailableReason'
+            - { type: 'null' }
         bestAccuracy: { type: [number, 'null'], minimum: 0, maximum: 1, description: Maximum accuracy after same-key same-step observations are canonicalized }
         bestAccuracyStep: { type: [integer, 'null'], minimum: 0, description: Smallest step containing the canonical best accuracy }
         bestAccuracyRecordedAt: { type: [string, 'null'], format: date-time }
         items: { type: array, items: { $ref: '#/components/schemas/BestStepMetric' } }
+      oneOf:
+        - title: Best-step Metrics available
+          properties:
+            status: { const: available }
+            unavailableReason: { type: 'null' }
+            bestAccuracy: { type: number, minimum: 0, maximum: 1 }
+            bestAccuracyStep: { type: integer, minimum: 0 }
+            bestAccuracyRecordedAt: { type: string, format: date-time }
+            items: { type: array, minItems: 1, items: { $ref: '#/components/schemas/BestStepMetric' } }
+        - title: Best-step Metrics unavailable
+          properties:
+            status: { const: unavailable }
+            unavailableReason: { $ref: '#/components/schemas/BestStepMetricsUnavailableReason' }
+            bestAccuracy: { type: 'null' }
+            bestAccuracyStep: { type: 'null' }
+            bestAccuracyRecordedAt: { type: 'null' }
+            items: { type: array, maxItems: 0 }
+    BestStepMetricsUnavailableReason:
+      type: string
+      enum: [snapshot_pending, accuracy_missing]
     BestStepMetric:
       type: object
       additionalProperties: false
@@ -279,10 +338,31 @@ components:
       required: [status, unavailableReason, parentBest, resultBest, delta]
       properties:
         status: { type: string, enum: [available, unavailable] }
-        unavailableReason: { type: [string, 'null'] }
+        unavailableReason:
+          anyOf:
+            - $ref: '#/components/schemas/AccuracyUnavailableReason'
+            - { type: 'null' }
         parentBest: { type: [number, 'null'], minimum: 0, maximum: 1 }
         resultBest: { type: [number, 'null'], minimum: 0, maximum: 1 }
         delta: { type: [number, 'null'], minimum: -1, maximum: 1 }
+      oneOf:
+        - title: Accuracy comparison available
+          properties:
+            status: { const: available }
+            unavailableReason: { type: 'null' }
+            parentBest: { type: number, minimum: 0, maximum: 1 }
+            resultBest: { type: number, minimum: 0, maximum: 1 }
+            delta: { type: number, minimum: -1, maximum: 1 }
+        - title: Accuracy comparison unavailable
+          properties:
+            status: { const: unavailable }
+            unavailableReason: { $ref: '#/components/schemas/AccuracyUnavailableReason' }
+            parentBest: { type: 'null' }
+            resultBest: { type: 'null' }
+            delta: { type: 'null' }
+    AccuracyUnavailableReason:
+      type: string
+      enum: [comparison_unavailable, parent_accuracy_missing, result_accuracy_missing, both_accuracy_values_missing]
     DatasetInputSnapshot:
       type: object
       additionalProperties: false
@@ -324,18 +404,68 @@ components:
       required: [status, unavailableReason, differences]
       properties:
         status: { type: string, enum: [changed, unchanged, unavailable] }
-        unavailableReason: { type: [string, 'null'] }
+        unavailableReason:
+          anyOf:
+            - $ref: '#/components/schemas/DatasetUnavailableReason'
+            - { type: 'null' }
         differences: { type: array, items: { $ref: '#/components/schemas/DatasetDifference' } }
+      oneOf:
+        - title: Dataset Inputs changed
+          properties:
+            status: { const: changed }
+            unavailableReason: { type: 'null' }
+            differences: { type: array, minItems: 1, items: { $ref: '#/components/schemas/DatasetDifference' } }
+        - title: Dataset Inputs unchanged
+          properties:
+            status: { const: unchanged }
+            unavailableReason: { type: 'null' }
+            differences: { type: array, maxItems: 0 }
+        - title: Dataset Input comparison unavailable
+          properties:
+            status: { const: unavailable }
+            unavailableReason: { $ref: '#/components/schemas/DatasetUnavailableReason' }
+            differences: { type: array, maxItems: 0 }
+    DatasetUnavailableReason:
+      type: string
+      enum: [comparison_unavailable, parent_dataset_inputs_missing, result_dataset_inputs_missing, both_dataset_inputs_missing, dataset_pairing_ambiguous]
     Comparison:
       type: object
       additionalProperties: false
       required: [status, unavailableReason, parameters, accuracy, datasets]
       properties:
         status: { type: string, enum: [available, unavailable] }
-        unavailableReason: { type: [string, 'null'] }
+        unavailableReason:
+          anyOf:
+            - $ref: '#/components/schemas/ComparisonUnavailableReason'
+            - { type: 'null' }
         parameters: { type: array, items: { $ref: '#/components/schemas/ParameterDifference' } }
         accuracy: { $ref: '#/components/schemas/AccuracyComparison' }
         datasets: { $ref: '#/components/schemas/DatasetComparison' }
+      oneOf:
+        - title: Snapshot comparison available
+          properties:
+            status: { const: available }
+            unavailableReason: { type: 'null' }
+        - title: Snapshot comparison unavailable
+          properties:
+            status: { const: unavailable }
+            unavailableReason: { $ref: '#/components/schemas/ComparisonUnavailableReason' }
+            parameters: { type: array, maxItems: 0 }
+            accuracy:
+              allOf:
+                - $ref: '#/components/schemas/AccuracyComparison'
+                - properties:
+                    status: { const: unavailable }
+                    unavailableReason: { const: comparison_unavailable }
+            datasets:
+              allOf:
+                - $ref: '#/components/schemas/DatasetComparison'
+                - properties:
+                    status: { const: unavailable }
+                    unavailableReason: { const: comparison_unavailable }
+    ComparisonUnavailableReason:
+      type: string
+      enum: [parent_run_missing, result_run_missing, parent_snapshot_pending, result_snapshot_pending]
     Lineage:
       type: object
       additionalProperties: false
