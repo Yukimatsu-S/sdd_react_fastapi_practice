@@ -1,10 +1,10 @@
 # Feature Specification: Mondel Initial MVP
 
-**Feature Branch**: `chore/create-specification`
+**Specification Branch**: `chore/create-specification` *(creation history)*
 
 **Created**: 2026-09-01
 
-**Status**: Ready for Planning
+**Status**: Ready for Implementation
 
 **Input**: User description: "機械学習モデルの改善を繰り返す開発者が、Evolution Stepの目的、仮説、派生元、変更点、実行結果、およびLineageを後から確認できる初期MVPを定義する。"
 

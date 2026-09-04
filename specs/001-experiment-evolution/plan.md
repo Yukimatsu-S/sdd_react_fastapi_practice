@@ -1,6 +1,6 @@
 # Implementation Plan: Mondel Initial MVP
 
-**Branch**: `chore/create-plan` | **Date**: 2026-09-02 | **Spec**: [spec.md](spec.md)
+**Plan Branch**: `chore/create-plan` *(creation history)* | **Date**: 2026-09-02 | **Spec**: [spec.md](spec.md)
 
 **Input**: Feature specification from `specs/001-experiment-evolution/spec.md`
 
@@ -26,7 +26,9 @@ Runの紐付け時、FastAPIは保存済みの`run_reference`を再利用し、�
 
 **Performance Goals**: Evolution Step list, comparison, and saved-detail reads respond within 500 ms p95 under an MVP dataset of 1,000 Evolution Steps; Run synchronization is a separate bounded request and does not delay the first saved-detail display; a Lineage response for 100 linked Evolution Steps responds within 1 s; UI enables the SC-001 to SC-003 workflows within their specified times
 
-**Constraints**: `uv` manages backend dependencies and `npm` manages frontend dependencies; backend database access uses synchronous SQLAlchemy with PyMySQL and FastAPI path operations that perform blocking I/O use normal `def`; React calls FastAPI through a hand-written typed wrapper around browser `fetch`; no TanStack Query, Testcontainers, asynchronous SQLAlchemy, or generated OpenAPI client in the initial MVP; browser never accesses MLflow or MySQL directly; no authentication, delete/archive, graphical lineage, learning-job control, background Run polling, or full Metric-history persistence/display; initial linking fails atomically when MLflow existence checks or integrity validation fail; Run references may exist before their Snapshot; finalized Parameters, best-step Metrics, Dataset Input metadata, captured status, captured timestamps, and raw metadata are immutable; only current Run name, current status, current execution times, and synchronization time remain mutable
+**Performance Measurement**: Seed exactly 1,000 Evolution Steps including one connected 100-Step Lineage in the dedicated MySQL test database; for each read target, run 5 unmeasured warm-up requests followed by 30 measured requests, exclude fixture setup and MLflow synchronization, and calculate p95 by the nearest-rank method from backend request elapsed times
+
+**Constraints**: `uv` manages backend dependencies and `npm` manages frontend dependencies; backend database access uses synchronous SQLAlchemy with PyMySQL and FastAPI path operations that perform blocking I/O use normal `def`; React calls FastAPI through a hand-written typed wrapper around browser `fetch`; MLflow Run candidate searches explicitly use `ViewType.ACTIVE_ONLY` so deleted Runs are excluded independently of execution status; no TanStack Query, Testcontainers, asynchronous SQLAlchemy, or generated OpenAPI client in the initial MVP; browser never accesses MLflow or MySQL directly; no authentication, delete/archive, graphical lineage, learning-job control, background Run polling, or full Metric-history persistence/display; initial linking fails atomically when MLflow existence checks or integrity validation fail; Run references may exist before their Snapshot; finalized Parameters, best-step Metrics, Dataset Input metadata, captured status, captured timestamps, and raw metadata are immutable; only current Run name, current status, current execution times, and synchronization time remain mutable
 
 **Scale/Scope**: One React application, one FastAPI service, one MySQL schema, one MLflow integration; CRUD is limited to create/read/update for Evolution Steps and Run associations
 
