@@ -1,0 +1,562 @@
+openapi: 3.1.0
+info:
+  title: Mondel API
+  version: 1.0.0
+  description: HTTP/JSON contract for the initial MVP. MLflow access is performed only by the server.
+servers:
+  - url: /api/v1
+paths:
+  /runs:
+    get:
+      summary: Search current MLflow Runs available for selection
+      parameters:
+        - $ref: '#/components/parameters/Query'
+        - $ref: '#/components/parameters/PageToken'
+      responses:
+        '200': { $ref: '#/components/responses/RunCandidatePage' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '502': { $ref: '#/components/responses/MlflowUnavailable' }
+  /runs/{runId}/sync:
+    parameters: [ { $ref: '#/components/parameters/RunId' } ]
+    post:
+      summary: Synchronize current Run metadata and capture a terminal Run Snapshot once
+      responses:
+        '200': { $ref: '#/components/responses/RunSyncResult' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '502': { $ref: '#/components/responses/MlflowUnavailable' }
+  /runs/{runId}/best-step-metrics:
+    parameters: [ { $ref: '#/components/parameters/RunId' } ]
+    get:
+      summary: Get locally stored Metrics recorded at the Run's best-accuracy step
+      responses:
+        '200': { $ref: '#/components/responses/BestStepMetrics' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /evolution-steps:
+    get:
+      summary: List stored Evolution Steps
+      parameters:
+        - $ref: '#/components/parameters/PageToken'
+      responses:
+        '200': { $ref: '#/components/responses/EvolutionStepList' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+    post:
+      summary: Create an Evolution Step and optionally attach validated Run links
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/EvolutionStepCreate' } } }
+      responses:
+        '201': { $ref: '#/components/responses/EvolutionStepDetail' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '502': { $ref: '#/components/responses/MlflowUnavailable' }
+  /evolution-steps/{evolutionStepId}:
+    parameters: [ { $ref: '#/components/parameters/EvolutionStepId' } ]
+    get:
+      summary: Get an Evolution Step and locally saved linked Run state
+      responses:
+        '200': { $ref: '#/components/responses/EvolutionStepDetail' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+    patch:
+      summary: Update editable fields and/or current Run links atomically
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/EvolutionStepPatch' } } }
+      responses:
+        '200': { $ref: '#/components/responses/EvolutionStepDetail' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '502': { $ref: '#/components/responses/MlflowUnavailable' }
+  /evolution-steps/{evolutionStepId}/comparison:
+    parameters: [ { $ref: '#/components/parameters/EvolutionStepId' } ]
+    get:
+      summary: Compare current parent and result snapshots
+      responses:
+        '200': { $ref: '#/components/responses/Comparison' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /evolution-steps/{evolutionStepId}/lineage:
+    parameters: [ { $ref: '#/components/parameters/EvolutionStepId' } ]
+    get:
+      summary: Return ordered ancestors, selected Evolution Step, and descendants
+      responses:
+        '200': { $ref: '#/components/responses/Lineage' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+components:
+  parameters:
+    EvolutionStepId: { name: evolutionStepId, in: path, required: true, schema: { type: integer, minimum: 1 } }
+    RunId: { name: runId, in: path, required: true, schema: { $ref: '#/components/schemas/RunIdentifier' } }
+    Query:
+      name: query
+      in: query
+      description: Case-insensitive substring of the MLflow Run name.
+      schema: { type: string, minLength: 1, maxLength: 100 }
+    PageToken:
+      name: pageToken
+      in: query
+      description: Opaque token returned by the previous page; reuse it only with the same endpoint and filters.
+      schema: { type: string, minLength: 1 }
+  schemas:
+    RunIdentifier:
+      type: string
+      minLength: 1
+      maxLength: 64
+      pattern: '^\S+$'
+    EvolutionStepCreate:
+      type: object
+      required: [purpose, hypothesis]
+      additionalProperties: false
+      properties:
+        purpose: { type: string, minLength: 1, pattern: '\S' }
+        hypothesis: { type: string, minLength: 1, pattern: '\S' }
+        changeDescription: { type: [string, 'null'], minLength: 1, pattern: '\S' }
+        parentRunId: { anyOf: [ { $ref: '#/components/schemas/RunIdentifier' }, { type: 'null' } ] }
+        resultRunId: { anyOf: [ { $ref: '#/components/schemas/RunIdentifier' }, { type: 'null' } ] }
+    EvolutionStepPatch:
+      type: object
+      minProperties: 1
+      additionalProperties: false
+      description: Fields omitted from PATCH are unchanged; explicit null unlinks a Run or clears changeDescription.
+      properties:
+        purpose: { type: string, minLength: 1, pattern: '\S' }
+        hypothesis: { type: string, minLength: 1, pattern: '\S' }
+        changeDescription: { type: [string, 'null'], minLength: 1, pattern: '\S' }
+        parentRunId: { anyOf: [ { $ref: '#/components/schemas/RunIdentifier' }, { type: 'null' } ] }
+        resultRunId: { anyOf: [ { $ref: '#/components/schemas/RunIdentifier' }, { type: 'null' } ] }
+    RunCandidatePage:
+      type: object
+      additionalProperties: false
+      required: [items, nextPageToken]
+      properties:
+        items:
+          type: array
+          maxItems: 20
+          items: { $ref: '#/components/schemas/RunCandidate' }
+        nextPageToken: { type: [string, 'null'] }
+    RunCandidate:
+      type: object
+      additionalProperties: false
+      required: [runId, runName, mlflowExperimentId, mlflowExperimentName, status, startedAt, endedAt]
+      properties:
+        runId: { $ref: '#/components/schemas/RunIdentifier' }
+        runName: { type: [string, 'null'] }
+        mlflowExperimentId: { type: string }
+        mlflowExperimentName: { type: string }
+        status: { type: string, enum: [RUNNING, SCHEDULED, FINISHED, FAILED, KILLED] }
+        startedAt: { type: [string, 'null'], format: date-time }
+        endedAt: { type: [string, 'null'], format: date-time }
+    RunSummary:
+      type: object
+      additionalProperties: false
+      required: [runId, runName, currentStatus, startedAt, endedAt, lastSyncedAt, snapshotState, snapshotCapturedAt]
+      properties:
+        runId: { $ref: '#/components/schemas/RunIdentifier' }
+        runName: { type: [string, 'null'] }
+        currentStatus: { type: string, enum: [RUNNING, SCHEDULED, FINISHED, FAILED, KILLED] }
+        startedAt: { type: [string, 'null'], format: date-time }
+        endedAt: { type: [string, 'null'], format: date-time }
+        lastSyncedAt: { type: string, format: date-time }
+        snapshotState: { type: string, enum: [pending, captured] }
+        snapshotCapturedAt: { type: [string, 'null'], format: date-time }
+      oneOf:
+        - title: Snapshot pending
+          properties:
+            snapshotState: { const: pending }
+            snapshotCapturedAt: { type: 'null' }
+        - title: Snapshot captured
+          properties:
+            snapshotState: { const: captured }
+            snapshotCapturedAt: { type: string, format: date-time }
+    EvolutionStepList:
+      type: object
+      additionalProperties: false
+      required: [items, nextPageToken]
+      properties:
+        items:
+          type: array
+          maxItems: 20
+          items: { $ref: '#/components/schemas/EvolutionStepListItem' }
+        nextPageToken: { type: [string, 'null'] }
+    EvolutionStepListItem:
+      type: object
+      additionalProperties: false
+      required: [id, purpose, hypothesis, parentRun, resultRun, comparisonSummary, createdAt, updatedAt]
+      properties:
+        id: { type: integer }
+        purpose: { type: string }
+        hypothesis: { type: string }
+        parentRun: { anyOf: [ { $ref: '#/components/schemas/RunSummary' }, { type: 'null' } ] }
+        resultRun: { anyOf: [ { $ref: '#/components/schemas/RunSummary' }, { type: 'null' } ] }
+        comparisonSummary: { $ref: '#/components/schemas/ComparisonSummary' }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    ComparisonSummary:
+      type: object
+      additionalProperties: false
+      required: [status, unavailableReason, parameterChangeCount, accuracy, datasetStatus, datasetUnavailableReason]
+      properties:
+        status: { type: string, enum: [available, unavailable] }
+        unavailableReason:
+          anyOf:
+            - $ref: '#/components/schemas/ComparisonUnavailableReason'
+            - { type: 'null' }
+        parameterChangeCount: { type: [integer, 'null'], minimum: 0 }
+        accuracy: { $ref: '#/components/schemas/AccuracyComparison' }
+        datasetStatus: { type: string, enum: [changed, unchanged, unavailable] }
+        datasetUnavailableReason:
+          anyOf:
+            - $ref: '#/components/schemas/DatasetUnavailableReason'
+            - { type: 'null' }
+      allOf:
+        - oneOf:
+            - title: Snapshot comparison summary available
+              properties:
+                status: { const: available }
+                unavailableReason: { type: 'null' }
+                parameterChangeCount: { type: integer, minimum: 0 }
+            - title: Snapshot comparison summary unavailable
+              properties:
+                status: { const: unavailable }
+                unavailableReason: { $ref: '#/components/schemas/ComparisonUnavailableReason' }
+                parameterChangeCount: { type: 'null' }
+                accuracy:
+                  allOf:
+                    - $ref: '#/components/schemas/AccuracyComparison'
+                    - properties:
+                        status: { const: unavailable }
+                        unavailableReason: { const: comparison_unavailable }
+                datasetStatus: { const: unavailable }
+                datasetUnavailableReason: { const: comparison_unavailable }
+        - oneOf:
+            - title: Dataset Input summary available
+              properties:
+                datasetStatus: { enum: [changed, unchanged] }
+                datasetUnavailableReason: { type: 'null' }
+            - title: Dataset Input summary unavailable
+              properties:
+                datasetStatus: { const: unavailable }
+                datasetUnavailableReason: { $ref: '#/components/schemas/DatasetUnavailableReason' }
+    EvolutionStepDetail:
+      type: object
+      additionalProperties: false
+      required: [id, purpose, hypothesis, changeDescription, parentRun, resultRun, createdAt, updatedAt, history]
+      properties:
+        id: { type: integer }
+        purpose: { type: string }
+        hypothesis: { type: string }
+        changeDescription: { type: [string, 'null'] }
+        parentRun: { anyOf: [ { $ref: '#/components/schemas/LinkedRun' }, { type: 'null' } ] }
+        resultRun: { anyOf: [ { $ref: '#/components/schemas/LinkedRun' }, { type: 'null' } ] }
+        history:
+          type: array
+          description: Ordered by changedAt ascending, then by the internal history ID ascending when timestamps tie; the internal ID is not exposed.
+          items: { $ref: '#/components/schemas/HistoryEntry' }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    LinkedRun:
+      type: object
+      additionalProperties: false
+      description: The Snapshot state is derived from Snapshot presence. The service also keeps reference.runId equal to snapshot.runId and snapshotCapturedAt equal to snapshot.capturedAt when captured.
+      required: [reference, snapshot]
+      properties:
+        reference: { $ref: '#/components/schemas/RunSummary' }
+        snapshot: { anyOf: [ { $ref: '#/components/schemas/RunSnapshot' }, { type: 'null' } ] }
+      oneOf:
+        - title: Linked Run with pending Snapshot
+          properties:
+            reference:
+              allOf:
+                - $ref: '#/components/schemas/RunSummary'
+                - properties:
+                    snapshotState: { const: pending }
+            snapshot: { type: 'null' }
+        - title: Linked Run with captured Snapshot
+          properties:
+            reference:
+              allOf:
+                - $ref: '#/components/schemas/RunSummary'
+                - properties:
+                    snapshotState: { const: captured }
+            snapshot: { $ref: '#/components/schemas/RunSnapshot' }
+    RunSnapshot:
+      type: object
+      additionalProperties: false
+      required: [runId, statusAtCapture, startedAt, endedAt, bestAccuracy, bestAccuracyStep, bestAccuracyRecordedAt, capturedAt, parameters, datasets]
+      properties:
+        runId: { $ref: '#/components/schemas/RunIdentifier' }
+        statusAtCapture: { type: string, enum: [FINISHED, FAILED, KILLED] }
+        startedAt: { type: [string, 'null'], format: date-time }
+        endedAt: { type: [string, 'null'], format: date-time }
+        bestAccuracy: { type: [number, 'null'], minimum: 0, maximum: 1, description: Maximum accuracy after same-key same-step observations are canonicalized }
+        bestAccuracyStep: { type: [integer, 'null'], format: int64, description: Smallest signed MLflow step containing the canonical best accuracy }
+        bestAccuracyRecordedAt: { type: [string, 'null'], format: date-time }
+        capturedAt: { type: string, format: date-time }
+        parameters: { type: object, additionalProperties: { type: string } }
+        datasets: { type: array, items: { $ref: '#/components/schemas/DatasetInputSnapshot' } }
+      oneOf:
+        - title: Snapshot with best accuracy
+          properties:
+            bestAccuracy: { type: number, minimum: 0, maximum: 1 }
+            bestAccuracyStep: { type: integer, format: int64 }
+            bestAccuracyRecordedAt: { type: string, format: date-time }
+        - title: Snapshot without accuracy
+          properties:
+            bestAccuracy: { type: 'null' }
+            bestAccuracyStep: { type: 'null' }
+            bestAccuracyRecordedAt: { type: 'null' }
+    RunSyncResult:
+      type: object
+      additionalProperties: false
+      required: [run]
+      properties:
+        run: { $ref: '#/components/schemas/LinkedRun' }
+    BestStepMetrics:
+      type: object
+      additionalProperties: false
+      required: [runId, status, unavailableReason, bestAccuracy, bestAccuracyStep, bestAccuracyRecordedAt, items]
+      properties:
+        runId: { $ref: '#/components/schemas/RunIdentifier' }
+        status: { type: string, enum: [available, unavailable] }
+        unavailableReason:
+          anyOf:
+            - $ref: '#/components/schemas/BestStepMetricsUnavailableReason'
+            - { type: 'null' }
+        bestAccuracy: { type: [number, 'null'], minimum: 0, maximum: 1, description: Maximum accuracy after same-key same-step observations are canonicalized }
+        bestAccuracyStep: { type: [integer, 'null'], format: int64, description: Smallest signed MLflow step containing the canonical best accuracy }
+        bestAccuracyRecordedAt: { type: [string, 'null'], format: date-time }
+        items: { type: array, items: { $ref: '#/components/schemas/BestStepMetric' } }
+      oneOf:
+        - title: Best-step Metrics available
+          properties:
+            status: { const: available }
+            unavailableReason: { type: 'null' }
+            bestAccuracy: { type: number, minimum: 0, maximum: 1 }
+            bestAccuracyStep: { type: integer, format: int64 }
+            bestAccuracyRecordedAt: { type: string, format: date-time }
+            items: { type: array, minItems: 1, items: { $ref: '#/components/schemas/BestStepMetric' } }
+        - title: Best-step Metrics unavailable
+          properties:
+            status: { const: unavailable }
+            unavailableReason: { $ref: '#/components/schemas/BestStepMetricsUnavailableReason' }
+            bestAccuracy: { type: 'null' }
+            bestAccuracyStep: { type: 'null' }
+            bestAccuracyRecordedAt: { type: 'null' }
+            items: { type: array, maxItems: 0 }
+    BestStepMetricsUnavailableReason:
+      type: string
+      enum: [snapshot_pending, accuracy_missing]
+    BestStepMetric:
+      type: object
+      additionalProperties: false
+      required: [name, value, step, recordedAt]
+      properties:
+        name: { type: string }
+        value: { type: number }
+        step: { type: integer, format: int64 }
+        recordedAt: { type: string, format: date-time, description: Greatest timestamp selected for this Metric name and step }
+    HistoryEntry:
+      type: object
+      additionalProperties: false
+      required: [field, oldValue, newValue, changedAt]
+      properties:
+        field:
+          type: string
+          enum: [purpose, hypothesis, changeDescription, parentRunId, resultRunId]
+        oldValue: { type: [string, 'null'] }
+        newValue: { type: [string, 'null'] }
+        changedAt: { type: string, format: date-time }
+    ParameterDifference:
+      type: object
+      additionalProperties: false
+      required: [name, status, parentValue, resultValue]
+      properties:
+        name: { type: string }
+        status: { type: string, enum: [added, changed, removed] }
+        parentValue: { type: [string, 'null'] }
+        resultValue: { type: [string, 'null'] }
+    AccuracyComparison:
+      type: object
+      additionalProperties: false
+      required: [status, unavailableReason, parentBest, resultBest, delta]
+      properties:
+        status: { type: string, enum: [available, unavailable] }
+        unavailableReason:
+          anyOf:
+            - $ref: '#/components/schemas/AccuracyUnavailableReason'
+            - { type: 'null' }
+        parentBest: { type: [number, 'null'], minimum: 0, maximum: 1 }
+        resultBest: { type: [number, 'null'], minimum: 0, maximum: 1 }
+        delta: { type: [number, 'null'], minimum: -1, maximum: 1 }
+      oneOf:
+        - title: Accuracy comparison available
+          properties:
+            status: { const: available }
+            unavailableReason: { type: 'null' }
+            parentBest: { type: number, minimum: 0, maximum: 1 }
+            resultBest: { type: number, minimum: 0, maximum: 1 }
+            delta: { type: number, minimum: -1, maximum: 1 }
+        - title: Accuracy comparison unavailable
+          properties:
+            status: { const: unavailable }
+            unavailableReason: { $ref: '#/components/schemas/AccuracyUnavailableReason' }
+            parentBest: { type: 'null' }
+            resultBest: { type: 'null' }
+            delta: { type: 'null' }
+    AccuracyUnavailableReason:
+      type: string
+      enum: [comparison_unavailable, parent_accuracy_missing, result_accuracy_missing, both_accuracy_values_missing]
+    DatasetInputSnapshot:
+      type: object
+      additionalProperties: false
+      required: [ordinal, name, digest, sourceType, source, schema, profile, context]
+      properties:
+        ordinal: { type: integer, minimum: 0 }
+        name: { type: string }
+        digest: { type: string }
+        sourceType: { type: string }
+        source: { type: string }
+        schema: { type: [string, 'null'] }
+        profile: { type: [string, 'null'] }
+        context: { type: [string, 'null'] }
+    DatasetIdentifier:
+      type: object
+      additionalProperties: false
+      required: [name, digest, sourceType, source, context]
+      properties:
+        name: { type: string }
+        digest: { type: string }
+        sourceType: { type: string }
+        source: { type: string }
+        context: { type: [string, 'null'] }
+    DatasetDifference:
+      type: object
+      additionalProperties: false
+      required: [status, parent, result, changedFields]
+      description: A difference between recorded Dataset Inputs; it does not describe row-level additions or deletions.
+      properties:
+        status: { type: string, enum: [changed, parent_only, result_only] }
+        parent: { anyOf: [ { $ref: '#/components/schemas/DatasetIdentifier' }, { type: 'null' } ] }
+        result: { anyOf: [ { $ref: '#/components/schemas/DatasetIdentifier' }, { type: 'null' } ] }
+        changedFields:
+          type: array
+          items: { type: string, enum: [digest, sourceType, source] }
+    DatasetComparison:
+      type: object
+      additionalProperties: false
+      required: [status, unavailableReason, differences]
+      properties:
+        status: { type: string, enum: [changed, unchanged, unavailable] }
+        unavailableReason:
+          anyOf:
+            - $ref: '#/components/schemas/DatasetUnavailableReason'
+            - { type: 'null' }
+        differences: { type: array, items: { $ref: '#/components/schemas/DatasetDifference' } }
+      oneOf:
+        - title: Dataset Inputs changed
+          properties:
+            status: { const: changed }
+            unavailableReason: { type: 'null' }
+            differences: { type: array, minItems: 1, items: { $ref: '#/components/schemas/DatasetDifference' } }
+        - title: Dataset Inputs unchanged
+          properties:
+            status: { const: unchanged }
+            unavailableReason: { type: 'null' }
+            differences: { type: array, maxItems: 0 }
+        - title: Dataset Input comparison unavailable
+          properties:
+            status: { const: unavailable }
+            unavailableReason: { $ref: '#/components/schemas/DatasetUnavailableReason' }
+            differences: { type: array, maxItems: 0 }
+    DatasetUnavailableReason:
+      type: string
+      enum: [comparison_unavailable, parent_dataset_inputs_missing, result_dataset_inputs_missing, both_dataset_inputs_missing, dataset_pairing_ambiguous]
+    Comparison:
+      type: object
+      additionalProperties: false
+      required: [status, unavailableReason, parameters, accuracy, datasets]
+      properties:
+        status: { type: string, enum: [available, unavailable] }
+        unavailableReason:
+          anyOf:
+            - $ref: '#/components/schemas/ComparisonUnavailableReason'
+            - { type: 'null' }
+        parameters: { type: array, items: { $ref: '#/components/schemas/ParameterDifference' } }
+        accuracy: { $ref: '#/components/schemas/AccuracyComparison' }
+        datasets: { $ref: '#/components/schemas/DatasetComparison' }
+      oneOf:
+        - title: Snapshot comparison available
+          properties:
+            status: { const: available }
+            unavailableReason: { type: 'null' }
+        - title: Snapshot comparison unavailable
+          properties:
+            status: { const: unavailable }
+            unavailableReason: { $ref: '#/components/schemas/ComparisonUnavailableReason' }
+            parameters: { type: array, maxItems: 0 }
+            accuracy:
+              allOf:
+                - $ref: '#/components/schemas/AccuracyComparison'
+                - properties:
+                    status: { const: unavailable }
+                    unavailableReason: { const: comparison_unavailable }
+            datasets:
+              allOf:
+                - $ref: '#/components/schemas/DatasetComparison'
+                - properties:
+                    status: { const: unavailable }
+                    unavailableReason: { const: comparison_unavailable }
+    ComparisonUnavailableReason:
+      type: string
+      enum: [parent_run_missing, result_run_missing, parent_snapshot_pending, result_snapshot_pending]
+    Lineage:
+      type: object
+      additionalProperties: false
+      required: [selected, ancestors, descendants]
+      properties:
+        selected: { $ref: '#/components/schemas/LineageStep' }
+        ancestors:
+          type: array
+          description: All ancestors ordered from the nearest to the farthest from the selected Evolution Step.
+          items: { $ref: '#/components/schemas/LineageStep' }
+        descendants:
+          type: array
+          description: All descendants ordered by distance from the selected Evolution Step, then by Evolution Step ID.
+          items: { $ref: '#/components/schemas/LineageStep' }
+    LineageStep:
+      type: object
+      additionalProperties: false
+      required: [id, purpose, hypothesis, parentEvolutionStepId, distanceFromSelected, parentRun, resultRun]
+      properties:
+        id: { type: integer, minimum: 1 }
+        purpose: { type: string }
+        hypothesis: { type: string }
+        parentEvolutionStepId:
+          type: [integer, 'null']
+          minimum: 1
+          description: Evolution Step whose result Run is this Step's parent Run; null when the parent Run is absent or is an unregistered upstream boundary.
+        distanceFromSelected:
+          type: integer
+          minimum: 0
+          description: Zero for the selected Evolution Step and one or greater for an ancestor or descendant.
+        parentRun: { anyOf: [ { $ref: '#/components/schemas/RunSummary' }, { type: 'null' } ] }
+        resultRun: { anyOf: [ { $ref: '#/components/schemas/RunSummary' }, { type: 'null' } ] }
+    Error:
+      type: object
+      required: [code, message, traceId]
+      properties: { code: { type: string }, message: { type: string }, traceId: { type: string } }
+  responses:
+    RunCandidatePage: { description: One token-paginated group of current MLflow Run candidates, content: { application/json: { schema: { $ref: '#/components/schemas/RunCandidatePage' } } } }
+    RunSyncResult: { description: Current Run reference and optional finalized Snapshot, content: { application/json: { schema: { $ref: '#/components/schemas/RunSyncResult' } } } }
+    BestStepMetrics: { description: Locally stored Metric values from the selected best-accuracy step; full histories are not returned, content: { application/json: { schema: { $ref: '#/components/schemas/BestStepMetrics' } } } }
+    EvolutionStepList: { description: One token-paginated group of stored Evolution Steps with compact comparison summaries, content: { application/json: { schema: { $ref: '#/components/schemas/EvolutionStepList' } } } }
+    EvolutionStepDetail: { description: Evolution Step detail using locally saved Run references and optional finalized Snapshots, content: { application/json: { schema: { $ref: '#/components/schemas/EvolutionStepDetail' } } } }
+    Comparison: { description: Snapshot comparison, content: { application/json: { schema: { $ref: '#/components/schemas/Comparison' } } } }
+    Lineage: { description: Ordered current lineage, content: { application/json: { schema: { $ref: '#/components/schemas/Lineage' } } } }
+    Conflict: { description: Duplicate result Run, same Run links, or cyclic lineage, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+    ValidationError: { description: Invalid request, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+    NotFound: { description: Requested Evolution Step or Run Reference was not found, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+    MlflowUnavailable: { description: MLflow was unavailable or returned incomplete required Run data; the requested synchronization, new reference, Snapshot, or association was not partially saved, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
