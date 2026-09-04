@@ -162,6 +162,15 @@ components:
         lastSyncedAt: { type: string, format: date-time }
         snapshotState: { type: string, enum: [pending, captured] }
         snapshotCapturedAt: { type: [string, 'null'], format: date-time }
+      oneOf:
+        - title: Snapshot pending
+          properties:
+            snapshotState: { const: pending }
+            snapshotCapturedAt: { type: 'null' }
+        - title: Snapshot captured
+          properties:
+            snapshotState: { const: captured }
+            snapshotCapturedAt: { type: string, format: date-time }
     EvolutionStepList:
       type: object
       additionalProperties: false
@@ -251,10 +260,28 @@ components:
     LinkedRun:
       type: object
       additionalProperties: false
+      description: The Snapshot state is derived from Snapshot presence. The service also keeps reference.runId equal to snapshot.runId and snapshotCapturedAt equal to snapshot.capturedAt when captured.
       required: [reference, snapshot]
       properties:
         reference: { $ref: '#/components/schemas/RunSummary' }
         snapshot: { anyOf: [ { $ref: '#/components/schemas/RunSnapshot' }, { type: 'null' } ] }
+      oneOf:
+        - title: Linked Run with pending Snapshot
+          properties:
+            reference:
+              allOf:
+                - $ref: '#/components/schemas/RunSummary'
+                - properties:
+                    snapshotState: { const: pending }
+            snapshot: { type: 'null' }
+        - title: Linked Run with captured Snapshot
+          properties:
+            reference:
+              allOf:
+                - $ref: '#/components/schemas/RunSummary'
+                - properties:
+                    snapshotState: { const: captured }
+            snapshot: { $ref: '#/components/schemas/RunSnapshot' }
     RunSnapshot:
       type: object
       additionalProperties: false
@@ -270,6 +297,17 @@ components:
         capturedAt: { type: string, format: date-time }
         parameters: { type: object, additionalProperties: { type: string } }
         datasets: { type: array, items: { $ref: '#/components/schemas/DatasetInputSnapshot' } }
+      oneOf:
+        - title: Snapshot with best accuracy
+          properties:
+            bestAccuracy: { type: number, minimum: 0, maximum: 1 }
+            bestAccuracyStep: { type: integer, format: int64 }
+            bestAccuracyRecordedAt: { type: string, format: date-time }
+        - title: Snapshot without accuracy
+          properties:
+            bestAccuracy: { type: 'null' }
+            bestAccuracyStep: { type: 'null' }
+            bestAccuracyRecordedAt: { type: 'null' }
     RunSyncResult:
       type: object
       additionalProperties: false

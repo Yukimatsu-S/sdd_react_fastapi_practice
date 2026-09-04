@@ -152,7 +152,7 @@
 - 別のEvolution Stepですでに実行結果Runとして使用されているRunへ変更しようとした場合、変更を完了せず、その理由を示す。
 - 同じRunを同じEvolution Stepの派生元Runと実行結果Runに指定する変更、またはLineageに循環を生じさせる変更をしようとした場合、変更を完了せず、その理由を示す。
 - 実行結果Runを変更した場合、他のEvolution Stepが派生元Runとして参照するRunは自動変更しない。実行結果Runを解除したEvolution Stepは、実行結果Runが未設定の状態になる。
-- Evolution Stepの保存後に利用を終了して再開した場合、保存済みのEvolution Step、Run、実測条件、評価指標、データセット識別情報、変更内容、変更履歴、およびLineageを確認できる。
+- Evolution Stepの保存後に利用を終了して再開した場合、保存済みのEvolution Step、Run、実測条件、評価指標、データセット識別情報、変更内容、および変更履歴を確認でき、現在のRun紐付けから再構成されたLineageを確認できる。
 
 ## Requirements *(mandatory)*
 
@@ -207,10 +207,10 @@
 
 ### Measurable Outcomes
 
-- **SC-001**: 利用者は、目的と仮説を入力して新しいEvolution Stepを定義し、外部で実行済みのRunを実行結果として紐付けるまでを 3 分以内に完了できる。
-- **SC-002**: 派生元Runと実行結果Runを持つEvolution Stepでは、利用者は詳細を開いてから 1 分以内に実測条件差分、最良accuracy、およびaccuracy差分を確認できる。
+- **SC-001**: 利用者は、目的と仮説を入力して新しいEvolution Stepを定義し、MLflow上に存在するRunを実行状態にかかわらず実行結果として紐付けるまでを 3 分以内に完了できる。
+- **SC-002**: 派生元Runと実行結果Runの確定済みSnapshotにaccuracyが記録されたEvolution Stepでは、利用者は詳細を開いてから 1 分以内に実測条件差分、最良accuracy、およびaccuracy差分を確認できる。
 - **SC-003**: 複数世代のLineageを持つEvolution Stepでは、利用者は選択したEvolution Stepのすべての祖先とすべての子孫を、派生順序とともに 1 分以内に識別できる。
-- **SC-004**: 保存済みEvolution Stepを利用終了後に再確認する検証で、目的、仮説、実行結果、変更内容、Lineageの 100% が閲覧可能である。
+- **SC-004**: 保存済みEvolution Stepを利用終了後に再確認する検証で、目的、仮説、実行結果、および変更内容の100%と、現在のRun紐付けから再構成されたLineageが閲覧可能である。
 
 ## Out of Scope
 
@@ -229,7 +229,7 @@
 - 学習処理は本製品の外部で行い、外部の学習コードが実行結果をMLflowに記録する。本製品はMLflowからRun、実測条件、評価指標、データセット識別情報を取得する。初期MVPで連携する実験管理ツールはMLflowのみとする。
 - 変更内容は、利用者が記録する変更の意図・予定・定性的説明である。実測条件は、MLflowから取得する実行済みRunの条件であり、両者を区別して表示する。
 - 実測条件はMLflowから取得できるすべてを表示および比較の対象とする。評価指標は、同一Metric名・同一stepの重複を最新timestamp、さらに同一timestampなら最大値で一本化した後、最大accuracyへ最初に到達した最小stepに記録された値だけを表示し、別stepの値で補完しない。自動結果差分はaccuracyだけを対象とする。accuracy以外の評価指標の最大化・最小化の判定、最良値の自動選択、利用者による比較対象の選択、および全stepのMetric履歴の保存・表示は初期MVPに含めない。
-- Run候補の取得時はMLflow上の現在のRun名と状態を表示する。RunをEvolution Stepへ紐付ける時はMLflow上の存在を確認し、Run Referenceを保存する。RUNNINGまたはSCHEDULEDならSnapshot未確定、FINISHED、FAILED、またはKILLEDならSnapshot確定として扱う。
+- Run候補の取得時はMLflow上の現在のRun名と状態を表示する。Mondelに未保存のRunを初めてEvolution Stepへ紐付ける時はMLflow上の存在を確認してRun Referenceを保存し、保存済みのRun Referenceは再利用する。RUNNINGまたはSCHEDULEDならSnapshot未確定、FINISHED、FAILED、またはKILLEDならSnapshot確定として扱う。
 - Run候補は一度に20件を取得する。次の候補群を示す値は利用者へ直接入力させず、フロントエンドが同じ検索条件とともに保持して使用する。総件数は初期MVPでは表示しない。
 - Evolution Step一覧は一度に20件を取得する。次の候補群を示す値はフロントエンドが保持し、一覧を再読み込みした場合は破棄して先頭から取得し直す。総件数は初期MVPでは表示しない。
 - Evolution Step詳細は保存済み情報を先に表示し、その後で紐付いたRunを自動同期する。Snapshot未確定のRunが終了状態ならSnapshotを確定し、実行中なら未確定のままとする。同期に失敗しても保存済み情報の閲覧を妨げない。

@@ -40,7 +40,7 @@ This row stores no product data. A transaction that can add, change, or remove a
 | `last_synced_at` | datetime(6) | UTC time of the last successful MLflow synchronization |
 | `created_at` | datetime(6) | UTC time when this reference was first saved |
 
-`run_name`, `current_status`, `started_at`, `ended_at`, and `last_synced_at` are mutable display metadata. Snapshot state is derived as `captured` when a matching `run_snapshot` row exists and `pending` otherwise.
+`run_name`, `current_status`, `started_at`, `ended_at`, and `last_synced_at` are mutable display metadata. Do not store a separate Snapshot-state column: derive `captured` when a matching `run_snapshot` row exists and `pending` otherwise. The API's `snapshot_captured_at` likewise comes from `run_snapshot.captured_at` and is null while no Snapshot row exists.
 
 ### `run_snapshot`
 

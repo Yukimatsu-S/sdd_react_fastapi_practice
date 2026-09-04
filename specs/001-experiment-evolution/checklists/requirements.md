@@ -45,3 +45,4 @@
 - Re-validated on 2026-09-03 after defining the post-creation history boundary and excluding initial, no-op, and rejected operations from change history. All 16 checks pass.
 - Re-validated on 2026-09-03 after constraining Run identifiers and making the supported change-history fields and nullable values explicit in the API contract. All 16 checks pass.
 - Re-validated on 2026-09-04 after aligning mutable Run Reference synchronization fields with immutable Run Snapshot evidence. All 16 checks pass.
+- Re-validated on 2026-09-04 after defining comparison availability and reason invariants, clarifying current-Lineage reconstruction, preserving signed MLflow steps, and aligning Snapshot state combinations across the specification, data model, API contract, research, and validation scenarios. All 16 checks pass.
