@@ -23,6 +23,7 @@ paths:
       responses:
         '200': { $ref: '#/components/responses/RunSyncResult' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
         '502': { $ref: '#/components/responses/MlflowUnavailable' }
   /runs/{runId}/best-step-metrics:
     parameters: [ { $ref: '#/components/parameters/RunId' } ]
@@ -31,6 +32,7 @@ paths:
       responses:
         '200': { $ref: '#/components/responses/BestStepMetrics' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
   /evolution-steps:
     get:
       summary: List stored Evolution Steps
@@ -56,6 +58,7 @@ paths:
       responses:
         '200': { $ref: '#/components/responses/EvolutionStepDetail' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
     patch:
       summary: Update editable fields and/or current Run links atomically
       requestBody:
@@ -74,6 +77,7 @@ paths:
       responses:
         '200': { $ref: '#/components/responses/Comparison' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
   /evolution-steps/{evolutionStepId}/lineage:
     parameters: [ { $ref: '#/components/parameters/EvolutionStepId' } ]
     get:
@@ -81,6 +85,7 @@ paths:
       responses:
         '200': { $ref: '#/components/responses/Lineage' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
 components:
   parameters:
     EvolutionStepId: { name: evolutionStepId, in: path, required: true, schema: { type: integer, minimum: 1 } }
