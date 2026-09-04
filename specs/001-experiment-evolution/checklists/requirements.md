@@ -44,3 +44,4 @@
 - Re-validated on 2026-09-03 after defining fixed-size cursor pagination and stable ordering for the Evolution Step list. All 16 checks pass.
 - Re-validated on 2026-09-03 after defining the post-creation history boundary and excluding initial, no-op, and rejected operations from change history. All 16 checks pass.
 - Re-validated on 2026-09-03 after constraining Run identifiers and making the supported change-history fields and nullable values explicit in the API contract. All 16 checks pass.
+- Re-validated on 2026-09-04 after aligning mutable Run Reference synchronization fields with immutable Run Snapshot evidence. All 16 checks pass.
