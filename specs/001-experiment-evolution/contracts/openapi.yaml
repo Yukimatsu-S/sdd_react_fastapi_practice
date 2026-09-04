@@ -237,7 +237,10 @@ components:
         changeDescription: { type: [string, 'null'] }
         parentRun: { anyOf: [ { $ref: '#/components/schemas/LinkedRun' }, { type: 'null' } ] }
         resultRun: { anyOf: [ { $ref: '#/components/schemas/LinkedRun' }, { type: 'null' } ] }
-        history: { type: array, items: { $ref: '#/components/schemas/HistoryEntry' } }
+        history:
+          type: array
+          description: Ordered by changedAt ascending, then by the internal history ID ascending when timestamps tie; the internal ID is not exposed.
+          items: { $ref: '#/components/schemas/HistoryEntry' }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
     LinkedRun:

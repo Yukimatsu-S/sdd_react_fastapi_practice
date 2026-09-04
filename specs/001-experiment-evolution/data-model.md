@@ -80,11 +80,11 @@ When a terminal Run has no valid `accuracy` observation, `best_accuracy`, `best_
 | `field` | enum | `purpose`, `hypothesis`, `change_description`, `parent_run_id`, `result_run_id` |
 | `old_value` | text nullable | `NULL` is an unlinked/absent value |
 | `new_value` | text nullable | `NULL` records unlinking |
-| `changed_at` | datetime(6) | UTC; list ascending |
+| `changed_at` | datetime(6) | UTC; order history by `(changed_at ASC, id ASC)` |
 
 History starts after the Evolution Step has been created. Insert one row whenever a successful user edit actually changes a supported field, including first Run attachment, later Run changes, and removals. Do not insert rows for initial creation, no-op updates that resend the current value, or operations rejected before transaction commit. Existing history is never updated or deleted by application code.
 
-The API serializes the database field names as `purpose`, `hypothesis`, `changeDescription`, `parentRunId`, or `resultRunId`. Every history response includes both `oldValue` and `newValue`; a known absence or unlink is represented by JSON `null`, not by omitting the property.
+The API serializes the database field names as `purpose`, `hypothesis`, `changeDescription`, `parentRunId`, or `resultRunId`. Every history response includes both `oldValue` and `newValue`; a known absence or unlink is represented by JSON `null`, not by omitting the property. History is returned by `(changed_at ASC, id ASC)` so rows created at the same timestamp retain a stable order. The internal history ID is used as the database tie-breaker and is not exposed in the API response.
 
 ## Linking and mutation validation
 
