@@ -50,7 +50,7 @@ This row stores no product data. A transaction that can add, change, or remove a
 | `status_at_capture` | varchar(16) | Terminal status captured once |
 | `started_at`, `ended_at` | datetime(6) nullable | Execution times captured once in UTC |
 | `best_accuracy` | double nullable | Maximum canonical `accuracy` value; null when no accuracy was logged |
-| `best_accuracy_step` | bigint nullable | Smallest MLflow step at which canonical `best_accuracy` was reached |
+| `best_accuracy_step` | bigint nullable | Smallest signed MLflow step at which canonical `best_accuracy` was reached |
 | `best_accuracy_recorded_at` | datetime(6) nullable | Timestamp of the selected accuracy observation |
 | `captured_at` | datetime(6) | UTC snapshot capture time |
 | `raw_metadata` | json nullable | Retained unmodeled fields for diagnosis |
@@ -65,7 +65,7 @@ When a terminal Run has no valid `accuracy` observation, `best_accuracy`, `best_
 
 ### `best_step_metric`
 
-`run_id` (FK to `run_snapshot`), `name`, `value` (double), `step` (bigint), and `recorded_at` (datetime(6)); primary key `(run_id, name)`. Before selecting the best step, group observations by `(run_id, name, step)` and retain the greatest `timestamp`; if multiple values have that timestamp, retain the greatest numeric value. Every stored row then uses `run_snapshot.best_accuracy_step`. A Metric with no canonical observation at that exact step is not inserted. Full histories are used only transiently during capture and are not persisted.
+`run_id` (FK to `run_snapshot`), `name`, `value` (double), `step` (signed bigint), and `recorded_at` (datetime(6)); primary key `(run_id, name)`. Preserve signed 64-bit MLflow steps, including negative, out-of-order, and non-contiguous values. Before selecting the best step, group observations by `(run_id, name, step)` and retain the greatest `timestamp`; if multiple values have that timestamp, retain the greatest numeric value. Every stored row then uses `run_snapshot.best_accuracy_step`. A Metric with no canonical observation at that exact step is not inserted. Full histories are used only transiently during capture and are not persisted.
 
 ### `dataset_input`
 

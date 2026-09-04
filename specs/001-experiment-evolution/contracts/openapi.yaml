@@ -265,7 +265,7 @@ components:
         startedAt: { type: [string, 'null'], format: date-time }
         endedAt: { type: [string, 'null'], format: date-time }
         bestAccuracy: { type: [number, 'null'], minimum: 0, maximum: 1, description: Maximum accuracy after same-key same-step observations are canonicalized }
-        bestAccuracyStep: { type: [integer, 'null'], minimum: 0, description: Smallest step containing the canonical best accuracy }
+        bestAccuracyStep: { type: [integer, 'null'], format: int64, description: Smallest signed MLflow step containing the canonical best accuracy }
         bestAccuracyRecordedAt: { type: [string, 'null'], format: date-time }
         capturedAt: { type: string, format: date-time }
         parameters: { type: object, additionalProperties: { type: string } }
@@ -288,7 +288,7 @@ components:
             - $ref: '#/components/schemas/BestStepMetricsUnavailableReason'
             - { type: 'null' }
         bestAccuracy: { type: [number, 'null'], minimum: 0, maximum: 1, description: Maximum accuracy after same-key same-step observations are canonicalized }
-        bestAccuracyStep: { type: [integer, 'null'], minimum: 0, description: Smallest step containing the canonical best accuracy }
+        bestAccuracyStep: { type: [integer, 'null'], format: int64, description: Smallest signed MLflow step containing the canonical best accuracy }
         bestAccuracyRecordedAt: { type: [string, 'null'], format: date-time }
         items: { type: array, items: { $ref: '#/components/schemas/BestStepMetric' } }
       oneOf:
@@ -297,7 +297,7 @@ components:
             status: { const: available }
             unavailableReason: { type: 'null' }
             bestAccuracy: { type: number, minimum: 0, maximum: 1 }
-            bestAccuracyStep: { type: integer, minimum: 0 }
+            bestAccuracyStep: { type: integer, format: int64 }
             bestAccuracyRecordedAt: { type: string, format: date-time }
             items: { type: array, minItems: 1, items: { $ref: '#/components/schemas/BestStepMetric' } }
         - title: Best-step Metrics unavailable
@@ -318,7 +318,7 @@ components:
       properties:
         name: { type: string }
         value: { type: number }
-        step: { type: integer, minimum: 0 }
+        step: { type: integer, format: int64 }
         recordedAt: { type: string, format: date-time, description: Greatest timestamp selected for this Metric name and step }
     HistoryEntry:
       type: object
