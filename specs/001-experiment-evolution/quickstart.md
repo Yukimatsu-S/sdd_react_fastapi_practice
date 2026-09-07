@@ -33,7 +33,7 @@ US1 must demonstrate single-Run saved-detail and best-step Metric viewing withou
 ## Automated verification
 
 - Backend: `uv run pytest` for unit, integration, MLflow-gateway mock, migration, and OpenAPI contract suites. Integration tests use an explicitly configured dedicated MySQL test database; Testcontainers is not required.
-- Frontend: `npm test` for Run-candidate fields, form behavior, local detail and all captured Parameters/Dataset Inputs, lazy best-step Metrics, synchronization request flow, list fields, errors, and comparison/Lineage display tests.
+- Frontend: `npm test -- --run` performs one-shot verification without watch mode for Run-candidate fields, form behavior, local detail and all captured Parameters/Dataset Inputs, lazy best-step Metrics, synchronization request flow, list fields, errors, and comparison/Lineage display tests.
 - End-to-end: After frontend/backend integration, `npm run test:e2e` runs one Playwright test for the critical create-and-attach journey with FastAPI, MySQL, and MLflow test fixtures. The remaining validation scenarios are covered by backend integration and frontend component tests. Preserve screenshots/traces for end-to-end failures.
 
 See [data-model.md](data-model.md) for persistence and integrity rules, and [contracts/openapi.yaml](contracts/openapi.yaml) for HTTP responses and error semantics.
