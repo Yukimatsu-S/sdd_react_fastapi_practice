@@ -3,5 +3,16 @@ name = "backend"
 version = "0.1.0"
 requires-python = ">=3.12"
 dependencies = [
+    "alembic>=1.19.2",
     "fastapi[standard]>=0.141.1",
+    "mlflow>=3.16.0",
+    "pydantic-settings>=2.15.0",
+    "pymysql[rsa]>=1.2.0",
+    "sqlalchemy>=2.0.52",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "ruff>=0.16.6",
 ]
