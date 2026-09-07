@@ -10,6 +10,8 @@
 
 Runの紐付け時、FastAPIは保存済みの`run_reference`を再利用し、未保存のRunだけMLflow上の存在、名前、状態を確認して新しいReferenceを保存する。RUNNINGまたはSCHEDULEDならSnapshot未確定のままEvolution Stepへ紐付け、FINISHED、FAILED、またはKILLEDならMetric名とstepが同じ記録を最新timestamp、さらに同一timestampなら最大値で一本化し、Parameters、一本化後のaccuracyが最大となる最小stepとそのstepのMetrics、Dataset Inputを取得してSnapshotを同一トランザクションで確定する。全stepのMetric履歴は永続化しない。Evolution Step一覧は作成日時とIDの降順で20件ずつカーソル取得する。Evolution Step詳細画面は保存済み情報を取得した後、紐付いたRunごとに同期APIを自動実行し、最良stepのMetric一覧を別のローカルAPIで段階取得する。同期時に未確定Runが終了状態ならSnapshotを一度だけ確定し、確定済みかどうかにかかわらずRun Referenceの現在のRun名、状態、開始・終了日時、および最終同期日時を更新する。Runの紐付け変更は共有ガード行を最初にロックして直列化し、現在の全`parent_run_id -> result_run_id`辺を検査して循環を拒否する。MySQLの一意制約では結果Runの重複利用を防止する。比較は確定済みSnapshotだけで算出し、Parametersはキー単位で追加・変更・削除、accuracyは保存済み最良値の差分、Dataset Inputは用途と名前で対応付けて`changed`、`parent_only`、`result_only`の差分だけを返す。
 
+同期の契機は詳細画面への遷移・再読み込みとする。バックグラウンドや画面表示中の定期ポーリングは行わず、同期成功後のローカル詳細・Metric再取得から再度同期を起動しない。
+
 ## Technical Context
 
 **Language/Version**: Python 3.12+ (backend, existing `pyproject.toml`), TypeScript (React; version finalized when frontend is initialized)
@@ -31,6 +33,8 @@ Runの紐付け時、FastAPIは保存済みの`run_reference`を再利用し、�
 **Constraints**: `uv` manages backend dependencies and `npm` manages frontend dependencies; backend database access uses synchronous SQLAlchemy with PyMySQL and FastAPI path operations that perform blocking I/O use normal `def`; React calls FastAPI through a hand-written typed wrapper around browser `fetch`; MLflow Run candidate searches explicitly use `ViewType.ACTIVE_ONLY` so deleted Runs are excluded independently of execution status; no TanStack Query, Testcontainers, asynchronous SQLAlchemy, or generated OpenAPI client in the initial MVP; browser never accesses MLflow or MySQL directly; no authentication, delete/archive, graphical lineage, learning-job control, background Run polling, or full Metric-history persistence/display; initial linking fails atomically when MLflow existence checks or integrity validation fail; Run references may exist before their Snapshot; finalized Parameters, best-step Metrics, Dataset Input metadata, captured status, captured timestamps, and raw metadata are immutable; only current Run name, current status, current execution times, and synchronization time remain mutable
 
 **Scale/Scope**: One React application, one FastAPI service, one MySQL schema, one MLflow integration; CRUD is limited to create/read/update for Evolution Steps and Run associations
+
+**Delivery Boundaries**: US1の完了には、Evolution Stepの作成・Runの紐付け機能だけでなく、候補の必須情報、詳細の全Parameters・Dataset Input、および各Runの最良stepのMetricsを確認できることを含める。最良step Metricsのローカル取得サービス、レスポンススキーマ、API、フロントエンド呼び出し・表示、および対応テストをUS1で揃え、結果Runだけの紐付けでも検証する。US2は一覧と比較要約、US3は2つのRunの詳細比較、US4はLineageの表示を追加する。US3の比較機能を、US1のRun詳細表示の前提にしない。
 
 ## Constitution Check
 
