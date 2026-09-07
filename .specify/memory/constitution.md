@@ -1,8 +1,8 @@
 <!--
 Sync Impact Report
-Version change: 0.0.0 -> 1.0.0
-Modified principles: I. Spec-Driven Delivery; II. Dual-Stack Contract Boundaries; III. Reproducible Tooling; IV. Test-First Verification; V. Simplicity and Traceability; VI. Readability-First Implementation; VII. Dependency Reduction and Loose Coupling
-Added sections: Additional Constraints; Development Workflow
+Version change: 1.0.0 -> 1.1.0
+Modified principles: IV. Test-First Verification (retained regression evidence)
+Added sections: none
 Removed sections: none
 Deferred items: none
 -->
@@ -28,6 +28,8 @@ React フロントエンドと FastAPI バックエンドは、それぞれ独�
 ### IV. テストファーストの検証
 新しい振る舞いは、実装を完了する前に失敗する確認や検証手順を明示しなければならない。
 API、UI、共有ロジックの変更は、最小単位で実行可能な自動または手動の検証を行い、検証の証跡がない変更はマージ対象とみなさない。
+
+要件または受け入れ基準を表す自動テストは、実装後も回帰テストとして保持しなければならない。元となる仕様の変更または廃止なしにテストを削除・弱体化してはならず、変更する場合は理由と対応する仕様を記録する。一時的な調査・デバッグ用コードは、回帰テストと明確に区別する。
 
 ### V. シンプルさと追跡可能性
 要件を満たすために必要最小限の設計を優先し、次の担当者が理解しやすい構成を選ばなければならない。
@@ -75,4 +77,4 @@ PR や変更は、元となる要件やタスクに紐づいている必要が�
 
 重要な変更には必ず適合性レビューを行う。もし本憲章と矛盾する実装や方針があれば、その矛盾は文書で解消または正当化され、関連する仕様や作業記録に反映されてから完了とみなす。
 
-**Version**: 1.0.0 | **Ratified**: 2026-09-01 | **Last Amended**: 2026-09-01
+**Version**: 1.1.0 | **Ratified**: 2026-09-01 | **Last Amended**: 2026-09-04

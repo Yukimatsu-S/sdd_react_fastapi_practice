@@ -1,20 +1,22 @@
 # Implementation Plan: Mondel Initial MVP
 
-**Branch**: `chore/create-plan` | **Date**: 2026-09-02 | **Spec**: [spec.md](spec.md)
+**Plan Branch**: `chore/create-plan` *(creation history)* | **Date**: 2026-09-02 | **Spec**: [spec.md](spec.md)
 
 **Input**: Feature specification from `specs/001-experiment-evolution/spec.md`
 
 ## Summary
 
-機械学習開発者がEvolution Stepの目的、仮説、手動の変更内容、MLflow Runの結果、差分、およびLineageを登録・確認するWebアプリケーション「Mondel」を構築する。Evolution Stepは派生元Runから実行結果Runへ進む一回の改善工程であり、複数のEvolution Stepを現在のRun紐付けで結んだ全体をLineageと呼ぶ。Reactは入力、一覧・詳細・差分・Lineageの表示を担い、FastAPIはHTTP/JSON API、入力検証、Run取得、履歴記録、Lineage整合性を担う。MySQLはEvolution Step、現在のRun紐付け、変更履歴、MLflowから取得した不変スナップショットを保存する。MLflowは外部で実行された学習のRun情報を提供する参照専用の外部システムであり、本製品は学習を開始・停止・再実行しない。
+機械学習開発者がEvolution Stepの目的、仮説、手動の変更内容、MLflow Runの結果、差分、およびLineageを登録・編集・確認するWebアプリケーション「Mondel」を構築する。Evolution Stepは派生元Runから実行結果Runへ進む一回の改善工程であり、複数のEvolution Stepを現在のRun紐付けで結んだ全体をLineageと呼ぶ。Reactは入力、編集、一覧・詳細・差分・Lineageの表示を担い、FastAPIはHTTP/JSON API、入力検証、Run取得、履歴記録、Lineage整合性を担う。MySQLはEvolution Step、現在のRun紐付け、変更履歴、MLflowから取得した不変スナップショットを保存する。MLflowは外部で実行された学習のRun情報を提供する参照専用の外部システムであり、本製品は学習を開始・停止・再実行しない。
 
 Runの紐付け時、FastAPIは保存済みの`run_reference`を再利用し、未保存のRunだけMLflow上の存在、名前、状態を確認して新しいReferenceを保存する。RUNNINGまたはSCHEDULEDならSnapshot未確定のままEvolution Stepへ紐付け、FINISHED、FAILED、またはKILLEDならMetric名とstepが同じ記録を最新timestamp、さらに同一timestampなら最大値で一本化し、Parameters、一本化後のaccuracyが最大となる最小stepとそのstepのMetrics、Dataset Inputを取得してSnapshotを同一トランザクションで確定する。全stepのMetric履歴は永続化しない。Evolution Step一覧は作成日時とIDの降順で20件ずつカーソル取得する。Evolution Step詳細画面は保存済み情報を取得した後、紐付いたRunごとに同期APIを自動実行し、最良stepのMetric一覧を別のローカルAPIで段階取得する。同期時に未確定Runが終了状態ならSnapshotを一度だけ確定し、確定済みかどうかにかかわらずRun Referenceの現在のRun名、状態、開始・終了日時、および最終同期日時を更新する。Runの紐付け変更は共有ガード行を最初にロックして直列化し、現在の全`parent_run_id -> result_run_id`辺を検査して循環を拒否する。MySQLの一意制約では結果Runの重複利用を防止する。比較は確定済みSnapshotだけで算出し、Parametersはキー単位で追加・変更・削除、accuracyは保存済み最良値の差分、Dataset Inputは用途と名前で対応付けて`changed`、`parent_only`、`result_only`の差分だけを返す。
+
+同期の契機は詳細画面への遷移・再読み込みとする。バックグラウンドや画面表示中の定期ポーリングは行わず、同期成功後のローカル詳細・Metric再取得から再度同期を起動しない。
 
 ## Technical Context
 
 **Language/Version**: Python 3.12+ (backend, existing `pyproject.toml`), TypeScript (React; version finalized when frontend is initialized)
 
-**Primary Dependencies**: FastAPI, Pydantic v2, SQLAlchemy 2.x, PyMySQL, Alembic, MLflow Python client; React, TypeScript, Vite, npm, React Router, browser `fetch`; Vitest, React Testing Library, Playwright (one critical flow after integration)
+**Primary Dependencies**: FastAPI, Pydantic v2, SQLAlchemy 2.x, PyMySQL, Alembic, MLflow Python client; React, TypeScript, Vite with its development proxy, npm, React Router, browser `fetch`; Vitest, React Testing Library, Playwright (one critical flow after integration)
 
 **Storage**: MySQL 8.0+ for application data, mutable MLflow Run references, and immutable finalized Run snapshots; MLflow Tracking Server is an external read-only source
 
@@ -26,9 +28,13 @@ Runの紐付け時、FastAPIは保存済みの`run_reference`を再利用し、�
 
 **Performance Goals**: Evolution Step list, comparison, and saved-detail reads respond within 500 ms p95 under an MVP dataset of 1,000 Evolution Steps; Run synchronization is a separate bounded request and does not delay the first saved-detail display; a Lineage response for 100 linked Evolution Steps responds within 1 s; UI enables the SC-001 to SC-003 workflows within their specified times
 
-**Constraints**: `uv` manages backend dependencies and `npm` manages frontend dependencies; backend database access uses synchronous SQLAlchemy with PyMySQL and FastAPI path operations that perform blocking I/O use normal `def`; React calls FastAPI through a hand-written typed wrapper around browser `fetch`; no TanStack Query, Testcontainers, asynchronous SQLAlchemy, or generated OpenAPI client in the initial MVP; browser never accesses MLflow or MySQL directly; no authentication, delete/archive, graphical lineage, learning-job control, background Run polling, or full Metric-history persistence/display; initial linking fails atomically when MLflow existence checks or integrity validation fail; Run references may exist before their Snapshot; finalized Parameters, best-step Metrics, Dataset Input metadata, captured status, captured timestamps, and raw metadata are immutable; only current Run name, current status, current execution times, and synchronization time remain mutable
+**Performance Measurement**: Seed exactly 1,000 Evolution Steps including one connected 100-Step Lineage in the dedicated MySQL test database; for each read target, run 5 unmeasured warm-up requests followed by 30 measured requests, exclude fixture setup and MLflow synchronization, and calculate p95 by the nearest-rank method from backend request elapsed times
+
+**Constraints**: `uv` manages backend dependencies and `npm` manages frontend dependencies; backend database access uses synchronous SQLAlchemy with PyMySQL and FastAPI path operations that perform blocking I/O use normal `def`; React calls the same-origin relative `/api/v1` base through a hand-written typed wrapper around browser `fetch`; during local development and E2E, Vite proxies `/api` requests to FastAPI at `http://127.0.0.1:8000`, so the MVP does not enable FastAPI CORS; any later separately hosted frontend must add a same-origin reverse proxy or explicitly redesign the allowed CORS origins; MLflow Run candidate searches explicitly use `ViewType.ACTIVE_ONLY` so deleted Runs are excluded independently of execution status; no TanStack Query, Testcontainers, asynchronous SQLAlchemy, or generated OpenAPI client in the initial MVP; browser never accesses MLflow or MySQL directly; no authentication, delete/archive, graphical lineage, learning-job control, background Run polling, or full Metric-history persistence/display; initial linking fails atomically when MLflow existence checks or integrity validation fail; Run references may exist before their Snapshot; finalized Parameters, best-step Metrics, Dataset Input metadata, captured status, captured timestamps, and raw metadata are immutable; only current Run name, current status, current execution times, and synchronization time remain mutable
 
 **Scale/Scope**: One React application, one FastAPI service, one MySQL schema, one MLflow integration; CRUD is limited to create/read/update for Evolution Steps and Run associations
+
+**Delivery Boundaries**: US1の完了には、Evolution Stepの作成・Runの紐付け機能だけでなく、候補の必須情報、詳細の全Parameters・Dataset Input、および各Runの最良stepのMetricsを確認できることを含める。最良step Metricsのローカル取得サービス、レスポンススキーマ、API、フロントエンド呼び出し・表示、および対応テストをUS1で揃え、結果Runだけの紐付けでも検証する。US2は一覧と比較要約、US3は2つのRunの詳細比較、US4はLineageの表示を追加する。US3の比較機能を、US1のRun詳細表示の前提にしない。
 
 ## Constitution Check
 
@@ -39,7 +45,7 @@ Runの紐付け時、FastAPIは保存済みの`run_reference`を再利用し、�
 | I. Spec-Driven Delivery | This plan, data model, HTTP contract, quickstart, and subsequent tasks trace to FR-001 through FR-030 and SC-001 through SC-004. | PASS |
 | II. Dual-Stack Contract Boundaries | React consumes only versioned FastAPI HTTP/JSON endpoints documented in `contracts/openapi.yaml`; FastAPI owns validation and business rules. | PASS |
 | III. Reproducible Tooling | Backend dependencies and commands use `uv`; frontend dependencies and commands use `npm`; test services are containerized. | PASS |
-| IV. Test-First Verification | Tests are specified for domain logic, persistence constraints, MLflow adapter behavior, API contracts, UI states, and end-to-end user flows before implementation. | PASS |
+| IV. Test-First Verification | Tests are specified for domain logic, persistence constraints, MLflow adapter behavior, API contracts, UI states, and end-to-end user flows before implementation, and automated tests are retained as the regression suite after they turn green. | PASS |
 | V-VII. Simplicity, Readability, Loose Coupling | A narrow MLflow gateway isolates external calls; pure comparison/lineage services receive explicit repositories and snapshots; no generic workflow engine or graph database is introduced. | PASS |
 
 **Post-design re-check**: The API contract keeps client/server responsibilities explicit. Separating mutable Run references from immutable finalized snapshots permits early linking without rewriting comparison evidence. Detail reads remain local and usable during MLflow outages, while a separate synchronization action makes the external side effect explicit. The MySQL relational model and bounded graph traversal satisfy the feature without a background worker or additional storage technology.
@@ -55,7 +61,8 @@ specs/[###-feature]/
 ├── data-model.md        # Phase 1 output (/speckit-plan command)
 ├── quickstart.md        # Phase 1 output (/speckit-plan command)
 ├── contracts/           # Phase 1 output (/speckit-plan command)
-└── tasks.md             # Phase 2 output (/speckit-tasks command - NOT created by /speckit-plan)
+├── tasks.md             # Phase 2 output (/speckit-tasks command - NOT created by /speckit-plan)
+└── validation-results.md # Phase 7 acceptance evidence created by T110
 ```
 
 ### Source Code (repository root)
@@ -82,14 +89,16 @@ frontend/
 │   ├── features/evolution-steps/
 │   ├── pages/
 │   └── routes/
-├── tests/
+├── e2e/                     # Playwright browser flows
+├── playwright.config.ts     # Chromium, web-server, and failure-artifact configuration
 └── package.json
 
 specs/001-experiment-evolution/
 ├── contracts/openapi.yaml
 ├── data-model.md
 ├── quickstart.md
-└── research.md
+├── research.md
+└── validation-results.md # Created after executing T110 acceptance validation
 ```
 
 **Structure Decision**: Adopt the Web application structure. The existing `backend/` becomes the FastAPI project organized by API, domain, infrastructure, and use-case layers. Add `frontend/` as the independent React/npm project. This keeps the HTTP contract as the only frontend/backend integration surface and confines MLflow to backend infrastructure.
