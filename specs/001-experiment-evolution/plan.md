@@ -61,7 +61,8 @@ specs/[###-feature]/
 ├── data-model.md        # Phase 1 output (/speckit-plan command)
 ├── quickstart.md        # Phase 1 output (/speckit-plan command)
 ├── contracts/           # Phase 1 output (/speckit-plan command)
-└── tasks.md             # Phase 2 output (/speckit-tasks command - NOT created by /speckit-plan)
+├── tasks.md             # Phase 2 output (/speckit-tasks command - NOT created by /speckit-plan)
+└── validation-results.md # Phase 7 acceptance evidence created by T110
 ```
 
 ### Source Code (repository root)
@@ -95,7 +96,8 @@ specs/001-experiment-evolution/
 ├── contracts/openapi.yaml
 ├── data-model.md
 ├── quickstart.md
-└── research.md
+├── research.md
+└── validation-results.md # Created after executing T110 acceptance validation
 ```
 
 **Structure Decision**: Adopt the Web application structure. The existing `backend/` becomes the FastAPI project organized by API, domain, infrastructure, and use-case layers. Add `frontend/` as the independent React/npm project. This keeps the HTTP contract as the only frontend/backend integration surface and confines MLflow to backend infrastructure.
