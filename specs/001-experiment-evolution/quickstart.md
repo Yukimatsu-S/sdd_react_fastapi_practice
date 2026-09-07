@@ -8,9 +8,9 @@
 
 ## Setup and run
 
-1. From `backend/`, run `uv sync`, apply Alembic migrations, then start FastAPI with the project command defined in `pyproject.toml`.
-2. From `frontend/`, run `npm ci` and `npm run dev`.
-3. Open the frontend URL printed by Vite. During US1, use the create and detail routes directly. After US2, also confirm the empty Evolution Step list loads through the API.
+1. From `backend/`, run `uv sync`, apply Alembic migrations, then start FastAPI at `http://127.0.0.1:8000` with the project command defined in `pyproject.toml`.
+2. From `frontend/`, run `npm ci` and `npm run dev`. Vite accepts the browser's relative `/api/v1/...` requests and proxies the `/api` prefix to the FastAPI process; the browser does not call port 8000 directly.
+3. Open the frontend URL printed by Vite. During US1, use the create and detail routes directly. After US2, also confirm the empty Evolution Step list loads through the proxied API.
 
 Before implementation, these commands are expected to become the reproducible project entry points. Their exact environment variable names and scripts are assigned during task generation.
 
@@ -34,6 +34,6 @@ US1 must demonstrate single-Run saved-detail and best-step Metric viewing withou
 
 - Backend: `uv run pytest` for unit, integration, MLflow-gateway mock, migration, and OpenAPI contract suites. Integration tests use an explicitly configured dedicated MySQL test database; Testcontainers is not required.
 - Frontend: `npm test -- --run` performs one-shot verification without watch mode for Run-candidate fields, form behavior, local detail and all captured Parameters/Dataset Inputs, lazy best-step Metrics, synchronization request flow, list fields, errors, and comparison/Lineage display tests.
-- End-to-end: After frontend/backend integration, `npm run test:e2e` runs one Playwright test for the critical create-and-attach journey with FastAPI, MySQL, and MLflow test fixtures. The remaining validation scenarios are covered by backend integration and frontend component tests. Preserve screenshots/traces for end-to-end failures.
+- End-to-end: After frontend/backend integration, `npm run test:e2e` runs one Playwright test for the critical create-and-attach journey with FastAPI, MySQL, and MLflow test fixtures. The browser must reach FastAPI through Vite's relative `/api` proxy rather than a direct backend origin. The remaining validation scenarios are covered by backend integration and frontend component tests. Preserve screenshots/traces for end-to-end failures.
 
 See [data-model.md](data-model.md) for persistence and integrity rules, and [contracts/openapi.yaml](contracts/openapi.yaml) for HTTP responses and error semantics.
