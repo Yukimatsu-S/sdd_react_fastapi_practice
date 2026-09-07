@@ -5,6 +5,11 @@ __pycache__/
 # Local Python environments
 .venv/
 
+# Local environment files
+.env
+.env.*
+!.env.example
+
 # Node.js dependencies and generated output
 node_modules/
 dist/
