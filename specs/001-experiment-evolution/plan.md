@@ -89,7 +89,8 @@ frontend/
 │   ├── features/evolution-steps/
 │   ├── pages/
 │   └── routes/
-├── tests/
+├── e2e/                     # Playwright browser flows
+├── playwright.config.ts     # Chromium, web-server, and failure-artifact configuration
 └── package.json
 
 specs/001-experiment-evolution/
