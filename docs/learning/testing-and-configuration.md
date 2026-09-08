@@ -1,6 +1,6 @@
 # 学習ノート：設定値の検証・DB接続確認・monkeypatch
 
-記録日：2026-09-08（T007完了後に作成、T008のRed確認まで追記）
+記録日：2026-09-08（T007完了後に作成、T009のGreen確認まで追記）
 
 ## 目的と全体像
 
@@ -11,7 +11,7 @@
 | 確認すること | MySQLへの通信 | 対応箇所 |
 | --- | --- | --- |
 | サンプルに通常用・テスト用の異なるURLが書かれているか | 不要 | `backend/tests/unit/test_test_environment.py` |
-| テスト用の設定を要求すると、正しいURLを選択・検証するか | 不要 | T008でテスト作成・Red確認済み、T009の処理は未実装 |
+| テスト用の設定を要求すると、正しいURLを選択・検証するか | 不要 | T008でRed確認、T009で実装・Green確認済み |
 | 指定されたDBへ実際に接続できるか | 必要 | `backend/scripts/check_test_database.py` |
 
 > 検証とは、期待する条件を満たすか確かめること。成功しても、検証対象に含まれないことまで保証されるわけではない。
@@ -205,6 +205,8 @@ cd ..
 
 ## 7. T008：実際のテストとRed確認
 
+この節はT008時点の履歴。現在の関数は第8節のとおり実装済みで、`None`だけを返す状態ではない。
+
 対象：[test_config.py](../../backend/tests/unit/test_config.py)、[config.py](../../backend/app/config.py)
 
 ### 入口だけを先に用意する理由
@@ -292,8 +294,54 @@ cd ..
 
 これをRed（期待する振る舞いがまだないことをテストで確認した状態）の証跡として残す。T008はRed確認までが目的なので完了、設定機能そのものはT009が終わるまで未完成。全テストが成功している状態ではない。
 
-## 8. 今後の追記方針
+## 8. T009：実装して同じテストを成功させる
 
-- T009作成後：環境変数の読み込み・検証処理と、テストがGreenになるまでの流れ。
+### 正常なテスト用設定を読む場合
+
+`test_config.py`の準備で通常用・テスト用・MLflowの環境変数を設定し、`load_settings(testing=True)`を呼ぶ。
+
+1. `if testing:`が真なので、`database_variable`に`"MONDEL_TEST_DATABASE_URL"`を入れる。ここはURLそのものではなく、環境変数の名前。
+2. `read_required_environment(database_variable)`を呼ぶ。
+3. その中の`os.environ.get(name)`が、テスト用URL文字列を取得する。未設定なら`None`。未設定・空文字・空白だけなら`raise ValueError(...)`で処理を止める。正常なら文字列を`return`する。
+4. 呼び出し元の`database_url`に、`"mysql+pymysql://example:example@127.0.0.1:3307/mondel_test"`が入る。
+5. `validate_database_url(database_url, database_variable)`が、URLを分解してドライバー、ホスト、DB名、明示されたポートの範囲を検査する。正常なら何も返さず次へ進む。この関数の`-> None`は「検査だけで、結果データを返さない」という意味で、以前の未実装の`return None`とは役割が違う。
+6. テスト用URLが通常用URLと完全一致していないか確認する。一致すれば拒否する。異なる表記で同じDBを指す可能性までは判定しない。
+7. `read_required_environment("MLFLOW_TRACKING_URI")`から`"http://127.0.0.1:5000"`を取得する。
+8. `validate_mlflow_uri()`がHTTP(S)形式・ホスト・ポートなどを検査する。Python標準の`urlsplit()`でURLを分解するだけで、通信はしない。
+9. `Settings(database_url=database_url, mlflow_tracking_uri=mlflow_tracking_uri)`で2つの値をまとめ、テスト関数へ返す。
+10. テスト関数が返却型とURLを比較する。今度は期待した値が返るので成功する。
+
+### 同じDBを指定した場合
+
+テストの`monkeypatch.setenv("MONDEL_TEST_DATABASE_URL", APPLICATION_URL)`により両方が同じ文字列になる。形式検査自体は通過するが、`load_settings()`の次の条件で止まる。
+
+```python
+if testing and database_url == os.environ.get("MONDEL_DATABASE_URL"):
+    raise ValueError("MONDEL_TEST_DATABASE_URL must differ from MONDEL_DATABASE_URL")
+```
+
+`and`は両方の条件を満たすこと。ここでは「テスト用として要求された」かつ「通常用と同じURL」。`raise`は例外を発生させ、その場所から正常な処理の続きを行わず呼び出し元へ知らせる。MLflowの検査やSettingsの作成には進まない。
+
+呼び出し元の`pytest.raises(ValueError, match="MONDEL_TEST_DATABASE_URL")`は、期待した例外と設定名を確認できるため成功する。T008では「エラーが出ない」ため失敗し、T009では「正しくエラーが出る」ため成功した。
+
+### URLを分解する関数自体がエラーになったら
+
+`try`内でURLの分解を行い、分解処理が出した想定内の例外を`except`で受け取る。呼び出し側へは、問題の設定名を含む`ValueError`として知らせる。`raise ... from None`は、元の例外表示を連結しない指定。URLに認証情報が含まれる可能性があるため、生のURLやパーサーの例外メッセージをエラー表示に含めない。
+
+### 検証結果（2026-09-08）
+
+`backend`ディレクトリのターミナルで実行した。
+
+```bash
+uv run pytest tests/unit/test_config.py tests/unit/test_test_environment.py -q
+uv run ruff check app tests/unit/test_config.py
+```
+
+結果は`31 passed`（T008の30ケース＋既存1ケース）、`All checks passed!`。T008のテスト内容は変更していない。これがGreen、つまり期待した振る舞いと実装の一致を確認できた状態。
+
+保証するのは検証した入力に対する設定の選択・検査。DBやMLflowには接続しておらず、FastAPI起動時の組み込みもまだ行っていない。すべての不正URLや同一DBの別名を網羅したわけではない。
+
+## 9. 今後の追記方針
+
 - T010以降：テスト用設定からDB接続へつながる場所と、接続の後片付け。
 - 新しい概念は「目的 → 対象ファイル・関数 → 具体的なデータの変化 → 検証範囲」の順で残す。
