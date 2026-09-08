@@ -36,6 +36,14 @@ Runの紐付け時、FastAPIは保存済みの`run_reference`を再利用し、�
 
 **Delivery Boundaries**: US1の完了には、Evolution Stepの作成・Runの紐付け機能だけでなく、候補の必須情報、詳細の全Parameters・Dataset Input、および各Runの最良stepのMetricsを確認できることを含める。最良step Metricsのローカル取得サービス、レスポンススキーマ、API、フロントエンド呼び出し・表示、および対応テストをUS1で揃え、結果Runだけの紐付けでも検証する。US2は一覧と比較要約、US3は2つのRunの詳細比較、US4はLineageの表示を追加する。US3の比較機能を、US1のRun詳細表示の前提にしない。
 
+## Configuration boundary (T008 / T009)
+
+- `load_settings(*, testing=False)` reads process environment variables and returns `Settings(database_url, mlflow_tracking_uri)`. Mode selection is explicit, not inferred from pytest. There is no implicit `.env` or `.env.example` loading and no settings cache in this initial boundary.
+- Normal mode selects `MONDEL_DATABASE_URL`; test mode selects `MONDEL_TEST_DATABASE_URL`. Only the selected DB variable is required; test mode never falls back to the normal URL. If the normal URL is supplied and exactly equals the test URL, reject it in test mode. This equality check is a guard, not proof that differently written URLs identify different databases; dedicated test-database setup remains required.
+- The selected DB URL must be non-blank, use `mysql+pymysql`, contain a non-blank host and database name, and have a valid port (1–65535) when explicitly specified. Do not require a particular host or local forwarded port for application settings. URL parsing alone does not prove these conditions or database reachability.
+- `MLFLOW_TRACKING_URI` is required in both modes and must identify an HTTP(S) server with a host. File-backed tracking is outside this application's external Tracking Server integration, even though MLflow itself supports it.
+- Invalid configuration raises `ValueError` (or a subclass), identifying the configuration variable. Tests exercise selection and validation without opening DB or MLflow connections. T009 implements validation; T008 introduces only the return shape and a no-behavior function scaffold so assertions run rather than failing at import time.
+
 ## Constitution Check
 
 *GATE: Passed before Phase 0 research and re-checked after Phase 1 design.*

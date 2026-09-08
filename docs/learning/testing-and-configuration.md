@@ -1,6 +1,6 @@
 # 学習ノート：設定値の検証・DB接続確認・monkeypatch
 
-記録日：2026-09-08（T007完了後、T008の学習時点）
+記録日：2026-09-08（T007完了後に作成、T008のRed確認まで追記）
 
 ## 目的と全体像
 
@@ -11,7 +11,7 @@
 | 確認すること | MySQLへの通信 | 対応箇所 |
 | --- | --- | --- |
 | サンプルに通常用・テスト用の異なるURLが書かれているか | 不要 | `backend/tests/unit/test_test_environment.py` |
-| テスト用の設定を要求すると、正しいURLを選択・検証するか | 不要 | T008でテスト、T009で処理を作成予定 |
+| テスト用の設定を要求すると、正しいURLを選択・検証するか | 不要 | T008でテスト作成・Red確認済み、T009の処理は未実装 |
 | 指定されたDBへ実際に接続できるか | 必要 | `backend/scripts/check_test_database.py` |
 
 > 検証とは、期待する条件を満たすか確かめること。成功しても、検証対象に含まれないことまで保証されるわけではない。
@@ -119,7 +119,7 @@ assert test_database_url.database == "mondel_test"
 
 ## 4. 学習用の例：monkeypatchで入力をそろえる
 
-以下は説明用のPythonコードで、実装済みのテストではない。ターミナルへ貼り付けるコマンドでもない。T008の設定テスト自体はまだ作成していない。
+以下は説明用のPythonコードで、実装済みのテストではない。ターミナルへ貼り付けるコマンドでもない。後から作成した実際のT008テストは第7節を参照する。
 
 ```python
 import os
@@ -203,8 +203,97 @@ cd ..
 
 期待結果は`PASS: (1, 'mondel_test', '8.0.46')`。このノート追加時には再実行していないため、ここに記載した期待値は新たな検証結果ではない。
 
-## 7. 今後の追記方針
+## 7. T008：実際のテストとRed確認
 
-- T008・T009作成後：実際の設定読み込み関数名、入力、戻り値、失敗時の流れ。
+対象：[test_config.py](../../backend/tests/unit/test_config.py)、[config.py](../../backend/app/config.py)
+
+### 入口だけを先に用意する理由
+
+`load_settings()`が存在しないまま読み込むと、テストの準備段階で失敗する。それでは設定を検査するテスト本文へ到達できない。そこで、関数の入口と戻り値の形だけを作り、中身は`return None`のままにしている。
+
+```python
+@dataclass(frozen=True)
+class Settings:
+    database_url: str
+    mlflow_tracking_uri: str
+```
+
+`class`は値や操作をまとめる型の定義。`database_url: str`は「この項目は文字列」という型の宣言。`@dataclass`は、これらの項目を持つ入れ物を作りやすくするPython標準の仕組み。`frozen=True`は作成後の項目への再代入を禁止する指定。ただし、この宣言だけではURLの検証や文字列型の実行時検査は行わない。
+
+```python
+def load_settings(*, testing: bool = False) -> Settings | None:
+    return None
+```
+
+`*`以降は`testing=True`のように名前付きで渡す。`bool`は真偽値の型、`False`は省略時の値。`-> Settings | None`は現在の戻り値の型の宣言で、`None`は値がないことを表す。T009では実装を完成させ、正常時に必ず`Settings`を返す形にする。
+
+`backend/app/__init__.py`は`app`をPythonパッケージとして扱う入口。`pytest.ini`の`pythonpath = .`は、この設定ファイルのある`backend`をテスト時のモジュール検索先に加える。これにより`from app.config import ...`を解決できる。
+
+### テスト実行時のデータの流れ
+
+1. pytestが`test_config.py`を読み込み、テストを収集する。
+2. 各ケースの前に`configuration_environment()`を実行する。
+3. `monkeypatch.setenv()`で通常用URL、テスト用URL、MLflow URIを既知の値にそろえる。
+4. ケースごとに値を削除・変更し、`load_settings(testing=...)`を呼ぶ。
+5. 現在の関数は何も読み取らず`None`を返す。
+6. 期待した設定やエラーが得られないため、テストが失敗する。
+7. pytestが環境変数と作業場所を元に戻す。
+
+準備関数の`@pytest.fixture(autouse=True)`は、このファイルの各テストで明示的に引数へ書かなくても準備を実行する指定。`tmp_path`はpytestが渡す一時ディレクトリ。`monkeypatch.chdir(tmp_path)`でそこへ作業場所を移し、開発者のローカルファイルに依存しにくい条件にする。今回の設計自体も暗黙の`.env`読み込みは行わない。
+
+### 正常系の具体例
+
+```python
+settings = load_settings(testing=True)
+assert isinstance(settings, Settings), "Validated Settings must be returned"
+assert settings.database_url == expected_url
+```
+
+テスト用URLとして準備している値は`mysql+pymysql://example:example@127.0.0.1:3307/mondel_test`。これはテスト内のダミー入力で、接続には使わない。
+
+`isinstance(settings, Settings)`は「返された値がSettings型か」を確認する。現在は`isinstance(None, Settings)`が偽なので最初の`assert`で止まる。DB URLの比較にはまだ到達しない。T009でSettingsが返るようになった後、選択したURL自体も検証する。
+
+### 異常系の具体例
+
+```python
+monkeypatch.delenv("MONDEL_TEST_DATABASE_URL")
+with pytest.raises(ValueError, match="MONDEL_TEST_DATABASE_URL"):
+    load_settings(testing=True)
+```
+
+`delenv()`でテスト用URLを未設定にする。`with pytest.raises(...)`は、字下げした処理で指定した例外が起きることを期待する。`match`はエラーメッセージの照合条件で、ここでは原因の設定名が含まれるかを確認する。
+
+現在は`None`が返り、例外は起きない。そのため`DID NOT RAISE ValueError`（期待したValueErrorが発生しなかった）でテストが失敗する。
+
+期待した種類の例外が出ればテストは成功する。エラーなしで処理が終わったり、別の例外が出たりした場合は失敗する。テストの成功は「処理の成功」ではなく「期待した振る舞いとの一致」。
+
+### 少ない関数で30ケースになる理由
+
+`@pytest.mark.parametrize`は、指定した入力の組ごとに同じテスト関数を繰り返し実行する仕組み。例えば通常・テストの2モードと、不正URLの8パターンを組み合わせた関数は16ケースになる。`@`から始まる記述はデコレーターと呼び、ここではpytestへ実行条件を伝える。
+
+### 実行コマンドと結果（2026-09-08）
+
+リポジトリのルートから、統合ターミナルで次を実行した。
+
+```bash
+cd backend
+uv run pytest tests/unit/test_config.py --tb=short -q
+uv run pytest tests/unit/test_test_environment.py -q
+uv run ruff check app tests/unit/test_config.py
+cd ..
+```
+
+`--tb=short`は失敗箇所の表示を短くする指定、`-q`は出力量を抑える指定。どちらも確認内容を減らす指定ではない。`ruff check`はコードの問題を静的に検出するもので、処理の振る舞いを保証するテストとは異なる。
+
+- 新規設定テスト：`30 failed`。返却型の不一致または期待した例外の未発生で失敗。収集・importエラーではない。
+- 既存サンプル確認テスト：`1 passed`。
+- Ruff：`All checks passed!`。
+- DB・MLflowへは接続していない。
+
+これをRed（期待する振る舞いがまだないことをテストで確認した状態）の証跡として残す。T008はRed確認までが目的なので完了、設定機能そのものはT009が終わるまで未完成。全テストが成功している状態ではない。
+
+## 8. 今後の追記方針
+
+- T009作成後：環境変数の読み込み・検証処理と、テストがGreenになるまでの流れ。
 - T010以降：テスト用設定からDB接続へつながる場所と、接続の後片付け。
 - 新しい概念は「目的 → 対象ファイル・関数 → 具体的なデータの変化 → 検証範囲」の順で残す。

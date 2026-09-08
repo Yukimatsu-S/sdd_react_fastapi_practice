@@ -1,0 +1,1 @@
+"""Mondel backend application package."""
