@@ -46,6 +46,14 @@ Runの紐付け時、FastAPIは保存済みの`run_reference`を再利用し、�
 - `MLFLOW_TRACKING_URI` is required in both modes and must identify an HTTP(S) server with a host. File-backed tracking is outside this application's external Tracking Server integration, even though MLflow itself supports it.
 - Invalid configuration raises `ValueError` (or a subclass), identifying the configuration variable. Tests exercise selection and validation without opening DB or MLflow connections. T009 implements validation; T008 introduces only the return shape and a no-behavior function scaffold so assertions run rather than failing at import time.
 
+## Database lifecycle boundary (T010 / T011)
+
+- `build_engine(settings)` constructs a synchronous SQLAlchemy Engine from the explicitly supplied settings. No global engine or automatic environment selection is introduced.
+- `get_session(session_factory)` is a normal synchronous generator that creates one fresh Session, yields it once, and closes it on normal completion or an exception. Request cleanup does not automatically commit; uncommitted work is discarded. T018 will supply the factory and register the FastAPI dependency; T010 verifies the lifecycle directly, not HTTP integration.
+- `transaction_scope(session)` is a context manager for one fresh transaction: commit on success, roll back and propagate the original exception on failure, including commit failure. It does not own/close the caller's Session. Nested transactions are not introduced here.
+- T010 fixtures establish a known working MySQL connection independently of the unimplemented application helpers. The local test harness requires `127.0.0.1:3307/mondel_test` (not a restriction on normal application configuration), uses uniquely named InnoDB probe tables per test, and drops only those tables during teardown. Use regular tables so separate connections can observe committed data. DDL is outside the transaction under test; no database-wide cleanup is performed.
+- Run DB tests from `backend` with `uv run --env-file .env.example pytest tests/integration/test_database.py`. This explicit uv option supplies environment variables; application code still does not implicitly load an env file. Missing/unreachable test infrastructure is a setup error, never an acceptable Red or a skipped passing test.
+
 ## Constitution Check
 
 *GATE: Passed before Phase 0 research and re-checked after Phase 1 design.*
