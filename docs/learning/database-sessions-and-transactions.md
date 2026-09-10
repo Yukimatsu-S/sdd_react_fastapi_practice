@@ -1,6 +1,6 @@
 # 学習ノート：DB Sessionとトランザクション
 
-記録日：2026-09-10。T010のテスト作成・Red確認時点。T011の本実装は未実施。
+記録日：2026-09-10。第1〜8節はT010のRed時点の記録。第9節にT011の実装・Green確認を追記。
 
 ## 1. 今回の目的と全体像
 
@@ -120,3 +120,74 @@ Sessionを返す関数の`next()`はyieldまで進める操作、`throw(error)`�
 - 整形後のDBテスト再実行も8 failed / 2 passed。終了後にinformation_schemaを読み取り、現在のDBに`t010_probe_`で始まるテーブルが残っていないことを確認した。
 
 T010は意図したRedまでを確認するタスク。DB共通処理の完成や全テスト成功を意味しない。T011ではこのテストを保持して、Engine・Session管理・commit/rollbackを実装する。
+
+## 9. T011：同じテストを成功させる実装
+
+対象は`app/infrastructure/database.py`。T010のテストを変更せず、3つの関数を実装した。ここからは現在の実装の説明。
+
+### Engineを作る
+
+`build_engine(settings)`が`create_engine(settings.database_url, connect_args=...)`の戻り値を返す。接続管理の準備であり、この時点では実接続しない。接続・読み取り・書き込みに5秒のタイムアウトを指定している。処理全体が5秒以内という意味ではない。
+
+### Sessionを渡し、利用後に閉じる
+
+```python
+session = session_factory()
+try:
+    yield session
+finally:
+    session.close()
+```
+
+1. `next(request)`で`get_session()`の本体を進める。
+2. `session_factory()`を呼び、新しいSessionを作る。関数を受け取るだけでなく、ここで`()`を付けて実行する。
+3. `yield session`で呼び出し元へ渡し、一時停止する。
+4. テストがSessionでDB操作を行う。
+5. 正常終了の`next()`、異常終了を再現する`throw(error)`、ジェネレーターの`close()`によって終了処理へ進む。
+6. `finally`がSessionを閉じる。未確定の変更を自動でcommitする処理はない。
+
+前のテストでは`yield None`のため型確認で止まっていたが、今は本物のSessionが渡るので、closeの呼び出し記録と未確定データの確認まで進んで成功する。
+
+### トランザクションを確定・取り消しする
+
+```python
+session.begin()
+try:
+    yield session
+    session.commit()
+except BaseException:
+    session.rollback()
+    raise
+```
+
+`begin()`はSessionのトランザクションを開始する。すでに開始済みなら新しく始められず拒否するため、この関数は新しいトランザクションの入口で使う。既存トランザクションの中から呼ぶ設計ではない。`begin()`をtryの外に置くことで、開始できなかった場合に呼び出し元のトランザクションを勝手にrollbackしない。
+
+正常時：`begin()` → `yield`でテストのブロックへ → ID 1・2を追加 → ブロック終了で再開 → `commit()` → 別接続から`[1, 2]`が見える。
+
+異常時：`yield`先のブロックで例外 → その例外がyieldの位置へ伝わる → commitには進まずexceptへ → `rollback()` → `raise`で元の例外を伝える。
+
+`raise`だけの行は、受け取って処理中の例外を再び伝える書き方。`BaseException`は通常のエラーに加えて中断やジェネレーター終了も含む例外の基底型。ここでは後片付け後に必ず再送出し、失敗や中断を成功として飲み込まない。
+
+commit自体もtryの中に置いているため、テストで差し替えたcommitが例外を出した場合もrollbackへ進む。transaction_scopeはSessionを閉じず、その所有者であるget_sessionやテストfixtureが閉じる。
+
+注意：ネットワーク切断でDB側の確定結果が不明な場合や、rollback自体が失敗する場合まで、このテストで保証しているわけではない。今回のcommit失敗テストは本物のcommitを行う前に例外を出す模擬である。
+
+### 実行コマンドと結果
+
+`backend`を作業場所として実行。
+
+```bash
+uv run --env-file .env.example pytest tests/integration/test_database.py -q --tb=short
+uv run pytest tests/unit -q
+uv run ruff check app tests
+```
+
+結果：10 passed（T010のテスト変更なし）、82 passed、All checks passed!。
+
+続けて`uv run --env-file .env.example pytest -q`で全バックエンドテストをまとめて実行し、92 passedを確認。終了後にMySQLのテーブル情報を読み取り、`t010_probe_`で始まる検証用テーブルが残っていないことも確認した。
+
+これで直接呼び出した場合のEngine構築、Sessionの分離・正常／異常終了時の解放、commit、rollback、commit失敗時の取り消しを確認した。実際のFastAPIリクエストとの結び付けはT018で行う。
+
+### 読み方の統一
+
+学習中の混乱を減らすため、今後の関数差し替えは理由がなければ`monkeypatch.setattr(対象, "属性名", 置き換えるもの)`の3引数に統一する。T011では既存テストを保持するため、過去の別表記の一括変更は行っていない。
