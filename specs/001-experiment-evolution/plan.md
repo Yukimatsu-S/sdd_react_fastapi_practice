@@ -38,6 +38,8 @@ Runの紐付け時、FastAPIは保存済みの`run_reference`を再利用し、�
 
 ## Configuration boundary (T008 / T009)
 
+- Both DB and MLflow URLs reject raw whitespace (Python `str.isspace()`, including spaces, tabs, and newlines) anywhere in the original value before URL parsing. Do not silently strip or repair URLs, or decode percent-encoded values for this check. This validation is URL-specific, not part of the generic required-environment reader.
+
 - `load_settings(*, testing=False)` reads process environment variables and returns `Settings(database_url, mlflow_tracking_uri)`. Mode selection is explicit, not inferred from pytest. There is no implicit `.env` or `.env.example` loading and no settings cache in this initial boundary.
 - Normal mode selects `MONDEL_DATABASE_URL`; test mode selects `MONDEL_TEST_DATABASE_URL`. Only the selected DB variable is required; test mode never falls back to the normal URL. If the normal URL is supplied and exactly equals the test URL, reject it in test mode. This equality check is a guard, not proof that differently written URLs identify different databases; dedicated test-database setup remains required.
 - The selected DB URL must be non-blank, use `mysql+pymysql`, contain a non-blank host and database name, and have a valid port (1–65535) when explicitly specified. Do not require a particular host or local forwarded port for application settings. URL parsing alone does not prove these conditions or database reachability.

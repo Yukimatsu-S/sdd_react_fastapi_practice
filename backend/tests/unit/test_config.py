@@ -2,7 +2,12 @@
 
 import pytest
 
-from app.config import Settings, load_settings
+from app.config import (
+    Settings,
+    load_settings,
+    validate_database_url,
+    validate_mlflow_uri,
+)
 
 APPLICATION_URL = "mysql+pymysql://example:example@127.0.0.1:3306/mondel"
 TEST_URL = "mysql+pymysql://example:example@127.0.0.1:3307/mondel_test"
@@ -106,3 +111,56 @@ def test_https_mlflow_server_is_supported(monkeypatch):
 
     assert isinstance(settings, Settings), "Validated Settings must be returned"
     assert settings.mlflow_tracking_uri == "https://mlflow.example.test"
+
+
+@pytest.mark.parametrize("testing, variable", [
+    (False, "MONDEL_DATABASE_URL"),
+    (True, "MONDEL_TEST_DATABASE_URL"),
+    (True, "MLFLOW_TRACKING_URI"),
+])
+@pytest.mark.parametrize("whitespace", [" ", "\t", "\n", "\u3000"])
+@pytest.mark.parametrize("position", ["leading", "trailing", "host", "path"])
+def test_raw_whitespace_is_rejected(monkeypatch, testing, variable, whitespace, position):
+    if variable == "MLFLOW_TRACKING_URI":
+        url = "http://mlflow.example.test/tracking"
+    else:
+        url = "mysql+pymysql://example:example@db.example.test/mondel"
+    if position == "leading":
+        url = whitespace + url
+    elif position == "trailing":
+        url = url + whitespace
+    elif position == "host":
+        url = url.replace(".example", whitespace + ".example")
+    else:
+        url = url + whitespace + "suffix"
+    monkeypatch.setenv(variable, url)
+
+    with pytest.raises(ValueError, match=variable):
+        load_settings(testing=testing)
+
+
+@pytest.mark.parametrize("kind", ["database", "mlflow"])
+def test_whitespace_is_rejected_before_parser_is_called(monkeypatch, kind):
+    def unexpected_parser_call(value):
+        pytest.fail("Whitespace must be rejected before calling the URL parser")
+
+    if kind == "database":
+        monkeypatch.setattr("app.config.make_url", unexpected_parser_call)
+        with pytest.raises(ValueError, match="MONDEL_TEST_DATABASE_URL"):
+            validate_database_url(TEST_URL + " ", "MONDEL_TEST_DATABASE_URL")
+    else:
+        monkeypatch.setattr("app.config.urlsplit", unexpected_parser_call)
+        with pytest.raises(ValueError, match="MLFLOW_TRACKING_URI"):
+            validate_mlflow_uri(MLFLOW_URI + " ")
+
+
+def test_percent_encoded_values_are_not_decoded_or_rewritten(monkeypatch):
+    database_url = "mysql+pymysql://example:pass%20word@db.example.test/mondel"
+    mlflow_uri = "https://mlflow.example.test/tracking%20service"
+    monkeypatch.setenv("MONDEL_TEST_DATABASE_URL", database_url)
+    monkeypatch.setenv("MLFLOW_TRACKING_URI", mlflow_uri)
+
+    settings = load_settings(testing=True)
+
+    assert settings.database_url == database_url
+    assert settings.mlflow_tracking_uri == mlflow_uri

@@ -22,8 +22,15 @@ def read_required_environment(name: str) -> str:
     return value
 
 
+def reject_url_whitespace(value: str, name: str) -> None:
+    """Inspect the original URL before a parser can normalize its characters."""
+    if any(character.isspace() for character in value):
+        raise ValueError(f"{name} must not contain raw whitespace")
+
+
 def validate_database_url(value: str, name: str) -> None:
     """Validate the selected MySQL URL, not the server's availability."""
+    reject_url_whitespace(value, name)
     message = f"{name} must be a mysql+pymysql URL with a host, database, and valid port"
     try:
         url = make_url(value)
@@ -42,13 +49,13 @@ def validate_database_url(value: str, name: str) -> None:
 
 def validate_mlflow_uri(value: str) -> None:
     """The MVP uses an external HTTP(S) Tracking Server, not a local file store."""
+    reject_url_whitespace(value, "MLFLOW_TRACKING_URI")
     message = "MLFLOW_TRACKING_URI must be an HTTP(S) server URL with a host and valid port"
     try:
         url = urlsplit(value)
         valid = (
             url.scheme in ("http", "https")
             and bool(url.hostname)
-            and not any(character.isspace() for character in value)
             and (url.port is None or 1 <= url.port <= 65535)
         )
     except ValueError:

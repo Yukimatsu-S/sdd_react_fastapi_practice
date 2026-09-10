@@ -341,7 +341,54 @@ uv run ruff check app tests/unit/test_config.py
 
 保証するのは検証した入力に対する設定の選択・検査。DBやMLflowには接続しておらず、FastAPI起動時の組み込みもまだ行っていない。すべての不正URLや同一DBの別名を網羅したわけではない。
 
-## 9. 今後の追記方針
+## 9. URLの空白検証を統一（2026-09-10）
+
+T009のコードを読み、DB側の`strip()`による「空白だけではない」検査と、MLflow側の「空白を一つも含まない」検査の差に気づいた。例えば`"my server".strip()`は途中のスペースを消さないため、DB側のホスト存在確認だけなら通過していた。
+
+方針をPlanへ記録し、両方とも元のURL文字列に生の空白があれば、分解前に拒否するよう変更した。勝手に空白を除去すると、指定した接続先を別の名前へ変える可能性があるため自動修正しない。必須値を読む関数はURL専用ではないため変更しない。
+
+### 具体例と呼び出し順
+
+入力が`mysql+pymysql://example:example@my server/mondel`の場合：
+
+1. `read_required_environment()`は非空の文字列としてそのまま返す。
+2. `validate_database_url()`が、最初に`reject_url_whitespace(value, name)`を呼ぶ。
+3. `any(character.isspace() for character in value)`が1文字ずつ確認する。スペースに到達すると真になる。
+4. 設定名を含む`ValueError`を発生させる。URL自体はメッセージに含めない。
+5. `make_url()`は呼ばれず、呼び出し元へ例外が伝わる。
+
+MLflowも同じ共通関数を`urlsplit()`より先に呼ぶ。正常なURLなら共通関数を通過して、それぞれ固有の形式検査へ進む。DB側の既存のホスト・DB名の存在確認は残している。
+
+### 追加したテスト
+
+- 通常用DB・テスト用DB・MLflowの3対象 × 半角空白・タブ・改行・全角空白の4種類 × 先頭・末尾・ホスト内・パス内の4位置：48ケース。
+- 分解処理を呼ぶ前に拒否すること：DBとMLflowの2ケース。
+- `%20`を含む値を勝手にデコード・書き換えしないこと：1ケース。これは空白文字そのものではなく文字列`%20`であり、実際の接続成功を保証するテストではない。
+
+分解前の確認では`monkeypatch.setattr("app.config.make_url", unexpected_parser_call)`などを使用する。`setattr`は対象の属性（ここでは呼び出す関数）をテスト中だけ置き換える。置き換えた関数が呼ばれたら`pytest.fail()`でテストを失敗させることで、空白を含むURLが分解処理へ到達しないことを確認する。テスト終了時には元の関数へ戻る。
+
+### RedからGreenの記録
+
+`backend`のターミナルで、実装修正前に実行：
+
+```bash
+uv run pytest tests/unit/test_config.py -q --tb=no
+```
+
+結果は`26 failed, 55 passed`。DBで空白を見逃す24ケースと、分解前に拒否していない2ケースが失敗した。`--tb=no`は詳細なスタック表示を省略するだけで、検査内容は変わらない。
+
+修正後に実行：
+
+```bash
+uv run pytest tests/unit/test_config.py tests/unit/test_test_environment.py -q
+uv run ruff check app tests/unit/test_config.py
+```
+
+テストは`82 passed`（従来31ケース＋追加51ケース）。Ruffのimport整形指摘を修正して再確認。DB・MLflowへの接続はしていない。
+
+学び：テストが全部成功していても、書かれていない条件の見落としは残る。検証の差を発見したら、方針とテストを追加してから実装を直す。URL分解後だけでなく、元の入力に対する条件も区別する。
+
+## 10. 今後の追記方針
 
 - T010以降：テスト用設定からDB接続へつながる場所と、接続の後片付け。
 - 新しい概念は「目的 → 対象ファイル・関数 → 具体的なデータの変化 → 検証範囲」の順で残す。
