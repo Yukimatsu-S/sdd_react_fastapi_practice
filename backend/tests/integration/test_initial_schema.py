@@ -6,6 +6,7 @@ empty importable metadata until T013 supplies the actual table definitions.
 
 import pytest
 from sqlalchemy import UniqueConstraint
+from sqlalchemy.dialects import mysql
 
 from app.infrastructure.models import metadata
 
@@ -121,3 +122,60 @@ def test_model_metadata_parent_run_is_not_unique():
     for index in table.indexes:
         if index.unique:
             assert tuple(index.columns.keys()) != ("parent_run_id",)
+
+
+@pytest.mark.parametrize("table_name, column_name", [
+    ("evolution_step", "id"),
+    ("run_snapshot", "best_accuracy_step"),
+    ("best_step_metric", "step"),
+    ("evolution_step_history", "id"),
+    ("evolution_step_history", "evolution_step_id"),
+])
+def test_model_metadata_signed_bigint(table_name, column_name):
+    table = require_table(table_name)
+    column_type = table.c[column_name].type
+    # Check the MySQL type, not the Python class chosen to express it.
+    mysql_type = column_type.compile(dialect=mysql.dialect())
+    assert mysql_type == "BIGINT"
+
+
+@pytest.mark.parametrize("table_name, column_name", [
+    ("evolution_step", "created_at"),
+    ("evolution_step", "updated_at"),
+    ("run_reference", "started_at"),
+    ("run_reference", "ended_at"),
+    ("run_reference", "last_synced_at"),
+    ("run_reference", "created_at"),
+    ("run_snapshot", "started_at"),
+    ("run_snapshot", "ended_at"),
+    ("run_snapshot", "best_accuracy_recorded_at"),
+    ("run_snapshot", "captured_at"),
+    ("best_step_metric", "recorded_at"),
+    ("evolution_step_history", "changed_at"),
+])
+def test_model_metadata_datetime_precision(table_name, column_name):
+    table = require_table(table_name)
+    column_type = table.c[column_name].type
+    mysql_type = column_type.compile(dialect=mysql.dialect())
+    assert mysql_type == "DATETIME(6)"
+
+
+@pytest.mark.parametrize("expected_expressions", [
+    ("parent_run_id",),
+    ("created_at DESC", "id DESC"),
+])
+def test_model_metadata_search_indexes(expected_expressions):
+    table = require_table("evolution_step")
+    non_unique_indexes = set()
+    for index in table.indexes:
+        if not index.unique:
+            expressions = tuple(
+                str(expression.compile(
+                    dialect=mysql.dialect(),
+                    compile_kwargs={"include_table": False},
+                ))
+                for expression in index.expressions
+            )
+            non_unique_indexes.add(expressions)
+    # Names are implementation details; column order and DESC are the contract.
+    assert expected_expressions in non_unique_indexes
