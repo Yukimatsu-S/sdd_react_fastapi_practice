@@ -48,6 +48,15 @@ EXPECTED_PRIMARY_KEYS = [
 ]
 
 
+EXPECTED_HISTORY_FIELDS = {
+    "purpose",
+    "hypothesis",
+    "change_description",
+    "parent_run_id",
+    "result_run_id",
+}
+
+
 def require_table(name):
     """Fail at a schema assertion rather than a missing-table KeyError."""
     assert name in metadata.tables, f"Model metadata must define table: {name}"
@@ -246,6 +255,4 @@ def test_model_metadata_history_field_enum():
     field_type = table.c.field.type
     assert isinstance(field_type, Enum)
     assert field_type.native_enum is True
-    assert set(field_type.enums) == {
-        "purpose", "hypothesis", "change_description", "parent_run_id", "result_run_id",
-    }
+    assert set(field_type.enums) == EXPECTED_HISTORY_FIELDS
