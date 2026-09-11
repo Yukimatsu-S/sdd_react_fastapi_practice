@@ -36,6 +36,15 @@ Runの紐付け時、FastAPIは保存済みの`run_reference`を再利用し、�
 
 **Delivery Boundaries**: US1の完了には、Evolution Stepの作成・Runの紐付け機能だけでなく、候補の必須情報、詳細の全Parameters・Dataset Input、および各Runの最良stepのMetricsを確認できることを含める。最良step Metricsのローカル取得サービス、レスポンススキーマ、API、フロントエンド呼び出し・表示、および対応テストをUS1で揃え、結果Runだけの紐付けでも検証する。US2は一覧と比較要約、US3は2つのRunの詳細比較、US4はLineageの表示を追加する。US3の比較機能を、US1のRun詳細表示の前提にしない。
 
+## Migration-test safety and recovery boundary (T012)
+
+- The migration fixture is not implemented yet. Manual recovery tooling lives in `backend/scripts/recover_test_schema.py`; it supports inspect, backup, explicit reset, and restore for the repository's Compose `mysql-test` / `mondel_test` only. T012 remains incomplete until the migration tests and verification evidence exist.
+- Reuse the dedicated local test-DB target validation. Before any DDL, inspect for the eight product tables and Alembic's `alembic_version` table. If any target already exists, stop without changing it and report the conflicting names and the recovery procedure in `docs/learning/database-sessions-and-transactions.md`, section 10. Do not interpret an existing table as disposable merely because its name matches.
+- Run migration tests exclusively on the dedicated DB; do not run another application, migration, or test process against it concurrently. A preflight existence check alone does not protect against concurrent writers.
+- The test must not create expected product tables with model `create_all()` / `Table.create()` before running migrations. Test-row transactions roll back separately from schema teardown: MySQL DDL is not undone by ordinary row rollback.
+- On normal completion or an assertion failure, teardown removes only objects owned by this test run. Track the preflight state and known migration targets, and arrange cleanup even if migration setup partially fails. Never drop the whole database or unrelated/pre-existing objects. Cleanup failures must be reported, not converted to success; forced termination may leave objects requiring recovery.
+- Recovery is human-reviewed: inspect existing objects and revision state first; preserve needed or uncertain data. Reset requires typed confirmation and a successful native SQL backup before any DROP; it refuses unknown objects and never disables foreign-key checks. Restore accepts only the operator's own trusted backup with a matching checksum, requires an empty DB and typed confirmation, and verifies table names/counts. Backups stay outside Git. DDL can partially complete on failure; the runbook covers inspection, retry and escalation. Do not automatically run `downgrade base` on an unknown or partially migrated DB. An alternative DB requires coordinated fixture safety configuration, credentials and isolation, not merely changing the URL.
+
 ## Configuration boundary (T008 / T009)
 
 - Both DB and MLflow URLs reject raw whitespace (Python `str.isspace()`, including spaces, tabs, and newlines) anywhere in the original value before URL parsing. Do not silently strip or repair URLs, or decode percent-encoded values for this check. This validation is URL-specific, not part of the generic required-environment reader.

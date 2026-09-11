@@ -15,3 +15,6 @@ node_modules/
 dist/
 coverage/
 *.log
+
+# Local database recovery backups (may contain private data)
+backend/.local/
