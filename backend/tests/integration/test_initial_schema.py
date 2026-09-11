@@ -5,7 +5,7 @@ empty importable metadata until T013 supplies the actual table definitions.
 """
 
 import pytest
-from sqlalchemy import UniqueConstraint
+from sqlalchemy import Enum, UniqueConstraint
 from sqlalchemy.dialects import mysql
 
 from app.infrastructure.models import metadata
@@ -179,3 +179,73 @@ def test_model_metadata_search_indexes(expected_expressions):
             non_unique_indexes.add(expressions)
     # Names are implementation details; column order and DESC are the contract.
     assert expected_expressions in non_unique_indexes
+
+
+@pytest.mark.parametrize("table_name, column_name, expected_type", [
+    ("evolution_step", "purpose", "TEXT"),
+    ("evolution_step", "hypothesis", "TEXT"),
+    ("evolution_step", "change_description", "TEXT"),
+    ("evolution_step", "parent_run_id", "VARCHAR(64)"),
+    ("evolution_step", "result_run_id", "VARCHAR(64)"),
+    ("lineage_mutation_guard", "id", "TINYINT"),
+    ("run_reference", "run_id", "VARCHAR(64)"),
+    ("run_reference", "mlflow_experiment_id", "VARCHAR(64)"),
+    ("run_reference", "run_name", "VARCHAR(255)"),
+    ("run_reference", "current_status", "VARCHAR(16)"),
+    ("run_snapshot", "run_id", "VARCHAR(64)"),
+    ("run_snapshot", "status_at_capture", "VARCHAR(16)"),
+    ("run_snapshot", "best_accuracy", "DOUBLE"),
+    ("run_snapshot", "raw_metadata", "JSON"),
+    ("best_step_metric", "value", "DOUBLE"),
+    ("dataset_input", "ordinal", "INTEGER"),
+    ("dataset_input", "raw_metadata", "JSON"),
+    ("evolution_step_history", "old_value", "TEXT"),
+    ("evolution_step_history", "new_value", "TEXT"),
+])
+def test_model_metadata_other_declared_types(table_name, column_name, expected_type):
+    table = require_table(table_name)
+    mysql_type = table.c[column_name].type.compile(dialect=mysql.dialect())
+    assert mysql_type == expected_type
+
+
+@pytest.mark.parametrize("table_name, column_name, nullable", [
+    ("evolution_step", "created_at", False),
+    ("evolution_step", "updated_at", False),
+    ("run_reference", "mlflow_experiment_id", True),
+    ("run_reference", "run_name", True),
+    ("run_reference", "current_status", False),
+    ("run_reference", "started_at", True),
+    ("run_reference", "ended_at", True),
+    ("run_reference", "last_synced_at", False),
+    ("run_reference", "created_at", False),
+    ("run_snapshot", "status_at_capture", False),
+    ("run_snapshot", "started_at", True),
+    ("run_snapshot", "ended_at", True),
+    ("run_snapshot", "best_accuracy", True),
+    ("run_snapshot", "best_accuracy_step", True),
+    ("run_snapshot", "best_accuracy_recorded_at", True),
+    ("run_snapshot", "captured_at", False),
+    ("run_snapshot", "raw_metadata", True),
+    ("dataset_input", "schema", True),
+    ("dataset_input", "profile", True),
+    ("dataset_input", "context", True),
+    ("dataset_input", "raw_metadata", True),
+    ("evolution_step_history", "evolution_step_id", False),
+    ("evolution_step_history", "field", False),
+    ("evolution_step_history", "old_value", True),
+    ("evolution_step_history", "new_value", True),
+    ("evolution_step_history", "changed_at", False),
+])
+def test_model_metadata_other_declared_nullability(table_name, column_name, nullable):
+    table = require_table(table_name)
+    assert table.c[column_name].nullable is nullable
+
+
+def test_model_metadata_history_field_enum():
+    table = require_table("evolution_step_history")
+    field_type = table.c.field.type
+    assert isinstance(field_type, Enum)
+    assert field_type.native_enum is True
+    assert set(field_type.enums) == {
+        "purpose", "hypothesis", "change_description", "parent_run_id", "result_run_id",
+    }
