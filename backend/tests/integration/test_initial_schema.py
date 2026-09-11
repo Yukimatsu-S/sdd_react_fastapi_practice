@@ -97,7 +97,8 @@ def test_model_metadata_unique_keys(table_name, columns):
     unique_keys.update(
         tuple(index.columns.keys()) for index in table.indexes if index.unique
     )
-    assert columns in unique_keys
+    # Reject missing keys and extra uniqueness rules that restrict valid data.
+    assert unique_keys == {columns}
 
 
 @pytest.mark.parametrize("column_name, nullable", [
