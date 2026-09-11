@@ -20,37 +20,44 @@ CONFIRM_RESET = "DELETE mondel_test schema"
 CONFIRM_RESTORE = "RESTORE mondel_test backup"
 
 
-def run_client(program, arguments, *, input_data=None):
+def run_client(
+    program: str,
+    arguments: list[str],
+    *,
+    input_data: bytes | None = None,
+) -> bytes:
     """Use only the repository's dedicated Compose service and its credentials."""
     command = [
         "docker", "compose", "-f", str(ROOT / "docker-compose.test.yml"),
         "exec", "-T", "mysql-test", "sh", "-c",
-        ('test "$MYSQL_DATABASE" = mondel_test && '
-        'test "$MYSQL_USER" = mondel_test && '
-        'export MYSQL_PWD="$MYSQL_PASSWORD" && exec "$@"'),
+        (
+            'test "$MYSQL_DATABASE" = mondel_test && '
+            'test "$MYSQL_USER" = mondel_test && '
+            'export MYSQL_PWD="$MYSQL_PASSWORD" && exec "$@"'
+        ),
         "recovery-client", program, "--user=mondel_test", *arguments,
     ]
     result = subprocess.run(command, input=input_data, capture_output=True, timeout=120, check=False)
     if result.returncode:
+        client_error = result.stderr.decode(errors="replace")
         raise RuntimeError(
             "MySQL client failed; no automatic retry. Check container health and "
-            "inspect the database before continuing. Client error: "
-            + result.stderr.decode(errors="replace")
+            f"inspect the database before continuing. Client error: {client_error}"
         )
     return result.stdout
 
 
-def execute_sql(statement):
+def execute_sql(statement: str) -> str:
     return run_client("mysql", [
         "--batch", "--skip-column-names", "mondel_test", "--execute", statement,
     ]).decode().strip()
 
 
-def inspect_database():
+def inspect_database() -> dict[str, int]:
     if execute_sql("SELECT DATABASE()") != "mondel_test":
         raise ValueError("Expected dedicated database mondel_test")
     listing = execute_sql("SHOW FULL TABLES")
-    tables = {}
+    tables: dict[str, int] = {}
     for line in listing.splitlines():
         name, kind = line.split("\t")
         if name not in TABLES or kind != "BASE TABLE":
@@ -75,7 +82,7 @@ def inspect_database():
     return tables
 
 
-def create_backup(backup_root, state):
+def create_backup(backup_root: Path, state: dict[str, int]) -> Path:
     label = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ") + "-" + uuid4().hex[:8]
     directory = Path(backup_root) / label
     directory.mkdir(parents=True, mode=0o700)
@@ -96,7 +103,7 @@ def create_backup(backup_root, state):
     return directory
 
 
-def read_backup(backup_directory):
+def read_backup(backup_directory: Path) -> tuple[bytes, dict[str, int]]:
     directory = Path(backup_directory)
     manifest = json.loads((directory / "manifest.json").read_text())
     dump = (directory / "schema.sql").read_bytes()
@@ -107,7 +114,7 @@ def read_backup(backup_directory):
     return dump, manifest["tables"]
 
 
-def reset_schema(backup_root):
+def reset_schema(backup_root: Path) -> None:
     state = inspect_database()
     if not state:
         print("Already empty; nothing deleted")
@@ -124,7 +131,7 @@ def reset_schema(backup_root):
     print("Reset complete. Tables/data removed; backup retained for restoration.")
 
 
-def restore_schema(backup_directory):
+def restore_schema(backup_directory: Path) -> None:
     if inspect_database():
         raise ValueError("Restore requires an empty database; no overwrite allowed")
     dump, expected = read_backup(backup_directory)
@@ -136,7 +143,7 @@ def restore_schema(backup_directory):
     print("Restore complete: table names and row counts match the backup manifest.")
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("action", choices=["inspect", "backup", "reset", "restore"])
     parser.add_argument("--backup-dir", type=Path)
