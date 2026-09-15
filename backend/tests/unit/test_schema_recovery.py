@@ -104,9 +104,29 @@ def test_restore_verifies_table_counts(monkeypatch, tmp_path):
     monkeypatch.setattr(recovery, "read_backup", lambda path: (b"dump", {"run_reference": 2}))
     monkeypatch.setattr(builtins, "input", lambda prompt: recovery.CONFIRM_RESTORE)
     writes = []
-    monkeypatch.setattr(recovery, "run_client", lambda *args, **kwargs: writes.append(kwargs))
+    monkeypatch.setattr(
+        recovery, "run_client",
+        lambda *args, **kwargs: writes.append((args, kwargs)),
+    )
     recovery.restore_schema(tmp_path)
-    assert writes == [{"input_data": b"dump"}]
+    assert writes == [(("mysql", ["mondel_test"]), {"input_data": b"dump"})]
+
+
+def test_restore_rejects_mismatched_row_counts(monkeypatch, tmp_path):
+    states = iter([{}, {"run_reference": 1}])
+    monkeypatch.setattr(recovery, "inspect_database", lambda: next(states))
+    monkeypatch.setattr(recovery, "read_backup", lambda path: (b"dump", {"run_reference": 2}))
+    monkeypatch.setattr(builtins, "input", lambda prompt: recovery.CONFIRM_RESTORE)
+    writes = []
+    monkeypatch.setattr(
+        recovery, "run_client",
+        lambda *args, **kwargs: writes.append((args, kwargs)),
+    )
+
+    with pytest.raises(RuntimeError, match="Restored table/count verification failed"):
+        recovery.restore_schema(tmp_path)
+
+    assert writes == [(("mysql", ["mondel_test"]), {"input_data": b"dump"})]
 
 
 def test_client_targets_only_compose_test_service(monkeypatch):
