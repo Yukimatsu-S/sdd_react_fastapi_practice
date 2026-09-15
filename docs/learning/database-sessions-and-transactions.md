@@ -194,7 +194,7 @@ uv run ruff check app tests
 
 ## 10. T012：マイグレーションテストの停止と復旧
 
-2026-09-11：手動復旧用の`backend/scripts/recover_test_schema.py`を追加。DBテストのfixture・自動後片付けはまだ未実装。復旧スクリプトは模擬テストで検証し、実DBでの削除・復元はまだ検証していない。
+2026-09-11：手動復旧用の`backend/scripts/recover_test_schema.py`を追加。この時点ではDBテストのfixture・自動後片付けは未実装だった。2026-09-15に追加したテスト用の適用・後片付けについては次の節を参照。復旧スクリプト自体の実DBバックアップ・復元の往復検証は引き続き未実施。
 
 モデルはPython上の構造の定義、マイグレーションはDBを変更する手順、MySQLのテーブルは適用後の実物。テスト側で先に完成したテーブルを作ると、マイグレーションの作成漏れを隠すため、適用結果を調べるテストでは代わりに作らない。
 
@@ -286,7 +286,40 @@ uv run --env-file .env.example pytest tests/integration/test_initial_schema.py
 
 想定外のデータ構造について、利用者に削除SQLを組み立てさせない。正常な復旧は上記コマンドで完了し、対応範囲外だけを明示的に引き継ぐ。
 
-### 今回確認した範囲
+## 11. T012：マイグレーションテスト（2026-09-15）
+
+対象は`backend/tests/integration/test_initial_schema.py`。製品モデルを使ってテーブルを先に作らず、初期リビジョンの`upgrade()`をAlembicの操作環境で実行し、MySQL上の構造を調べる。T014の設定ファイル・CLIの動作や適用バージョン記録まで検証するものではない。
+
+### データの受け渡し
+
+1. pytestが既存の`database_engine` fixtureで専用DBへの接続を確認する。
+2. `migrated_schema` fixtureは、そのEngineを使う`apply_initial_migration`関数を返す。fixtureの準備時点ではマイグレーションを実行しない。
+3. テストが`with migrated_schema() as connection:`を実行すると、初期ファイルの存在確認、既存テーブル・ビューとの衝突確認を行う。
+4. 設定した接続を`MigrationContext`、続いて`Operations.context`へ渡す。その中でリビジョンの`upgrade()`を呼ぶため、リビジョン内の`op.create_table()`等はこの接続を使う。
+5. 初期データをcommitした後、`yield connection`でテストへ接続を渡す。テストはInspectorで構造を読むか、別のトランザクション内で実データを保存して制約を確認する。
+6. ブロックの終了・失敗時に`finally`へ戻り、行操作をrollbackし、今回作った既知の対象だけを依存順に削除する。既存対象がある場合はこの処理へ入る前に止まる。DDL失敗で片付けられなければエラーを隠さず復旧手順へ引き継ぐ。
+
+型・NULL許可・外部キー・一意制約は、設計に対する独立したモデルテストと、MySQLから読み戻した定義との一致確認を組み合わせる。これとは別に、主キー・結果Runの重複、存在しない参照先、必須値のNULL、子テーブルの複合キーなどは実際のINSERT/UPDATEで拒否されるか確認する。正しい準備データの保存は`pytest.raises()`の外で行い、準備失敗を期待した制約違反と取り違えない。共有派生元・複数NULL結果の成功例、負の64ビットstepと小数秒の往復、ガード行1件も対象。
+
+### 検証と現在の状態
+
+`backend`のターミナルで実行する。
+
+```bash
+uv run --env-file .env.example pytest tests/integration/test_initial_schema.py -q --tb=no
+uv run --env-file .env.example pytest tests/integration/test_initial_schema.py -k harness -q
+uv run --env-file .env.example pytest tests/unit tests/integration/test_database.py -q
+uv run ruff check tests/integration/test_initial_schema.py
+uv run python scripts/recover_test_schema.py inspect
+```
+
+結果：全体132 failed / 5 passed。定義不足と初期リビジョン不在によるRedで、収集・fixture準備エラーではない。モデルとの一致確認8件はモデル不在で先に停止する。実際の製品テーブルの検証まで到達したわけではなく、T013-T015で引き続き確認する。
+
+`harness`はテストの準備・後片付け自体を検証する5件。pytestの一時フォルダに最小リビジョンを作り、専用DBに検証用ガード表を作成して、成功時・適用失敗時・テスト失敗時の削除と、既存対象・無関係なテーブルの保持を確認した。検証用の表と行は後片付け済みで再実行により再作成できる。製品のマイグレーションファイルは作成していない。
+
+既存のユニット・DBライフサイクルテスト105件、Ruffは成功。最終の読み取り確認は`{}`で、テストDBに表が残っていないことを確認した。これは復旧スクリプトのバックアップ・復元の往復検証とは別。
+
+## 補足：復旧スクリプトの初回検証記録（2026-09-11）
 
 `backend`で以下を実行した。
 
