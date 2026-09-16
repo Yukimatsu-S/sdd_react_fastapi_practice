@@ -6,6 +6,14 @@
 
 ## Tables
 
+### Physical representation (T013)
+
+Use explicit SQLAlchemy `Table` / `Column` definitions in one `MetaData` object; importing them performs no DB connection or DDL. All tables use InnoDB, `utf8mb4`, and `utf8mb4_0900_bin` so identifier/key comparisons do not merge differently cased names. This collation requires MySQL 8.0.17+ (the existing test environment uses 8.0.46); T015 must apply the same options.
+
+For fields whose physical types were previously unspecified: Parameter/Metric names use `varchar(250)`, matching the installed MLflow client's `MAX_ENTITY_KEY_LENGTH`; Parameter values use `text` (the installed client limits values to 6,000 characters). Dataset `id` uses signed `bigint`; its non-indexed text metadata (`name`, `digest`, `source_type`, `source`, `schema`, `profile`, `context`) uses `longtext` to avoid inventing short limits for externally supplied strings. Existing nullability rules are unchanged. Numeric application IDs use auto-increment; guard ID does not. Nullable JSON uses SQL NULL for Python None, not the JSON literal null. Timestamps have no automatic default/update behavior: services supply UTC values, including no-op update handling. Required non-blank text, valid statuses, snapshot immutability and lineage validation remain service responsibilities, not additional DB checks in T013.
+
+References: installed MLflow `utils/validation.py` constants; [MySQL 8.0.17 collation release notes](https://dev.mysql.com/doc/relnotes/mysql/8.0/en/news-8-0-17.html). Physical encoding/collation choices still require real MySQL verification in T015; metadata-test success alone does not establish storage behavior.
+
 ### `evolution_step`
 
 | Field | Type | Rules |

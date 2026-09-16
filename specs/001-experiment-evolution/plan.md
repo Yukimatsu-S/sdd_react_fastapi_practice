@@ -18,7 +18,7 @@ Runの紐付け時、FastAPIは保存済みの`run_reference`を再利用し、�
 
 **Primary Dependencies**: FastAPI, Pydantic v2, SQLAlchemy 2.x, PyMySQL, Alembic, MLflow Python client; React, TypeScript, Vite with its development proxy, npm, React Router, browser `fetch`; Vitest, React Testing Library, Playwright (one critical flow after integration)
 
-**Storage**: MySQL 8.0+ for application data, mutable MLflow Run references, and immutable finalized Run snapshots; MLflow Tracking Server is an external read-only source
+**Storage**: MySQL 8.0.17+ for application data, mutable MLflow Run references, and immutable finalized Run snapshots; T013 uses explicit SQLAlchemy Table/Column metadata with InnoDB and utf8mb4_0900_bin (physical choices in data-model.md) to preserve case-sensitive external keys; MLflow Tracking Server is an external read-only source
 
 **Testing**: pytest + FastAPI TestClient against a dedicated MySQL test database for backend unit/integration/contract tests; Vitest + React Testing Library when frontend implementation starts; Playwright for one critical end-to-end flow after frontend/backend integration
 

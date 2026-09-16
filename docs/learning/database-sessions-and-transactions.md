@@ -321,6 +321,27 @@ uv run python scripts/recover_test_schema.py inspect
 
 既存のユニット・DBライフサイクルテスト105件、Ruffは成功。最終の読み取り確認は`{}`で、テストDBに表が残っていないことを確認した。これは復旧スクリプトのバックアップ・復元の往復検証とは別。
 
+## 12. T013：Python側のテーブル定義（2026-09-16）
+
+`backend/app/infrastructure/models.py`に8テーブルを明示的な`Table`と`Column`で定義した。共通生成関数やクラス階層は作らず、各表の列・型・制約を同じ場所で読めることを優先する。
+
+pytestがテストファイルを読み込む → `from app.infrastructure.models import metadata`によりmodels.pyを読み込む → `MetaData()`で定義の管理オブジェクトを作る → 各`Table("表名", metadata, Column(...))`が列定義を持つTableオブジェクトを作り、同じmetadataへ登録する → テストが`metadata.tables["表名"]`から定義を取り出して確認する。この時点ではMySQLへ接続せず、実テーブルも行データも作らない。
+
+例えば`lineage_mutation_guard = Table("lineage_mutation_guard", metadata, Column("id", TINYINT, primary_key=True, autoincrement=False), ...)`では、変数とmetadataの両方から同じTableオブジェクトを参照できる。`id`という列を定義しただけで、値1の行は存在しない。ガード行の挿入と実DBへの適用はT015で行う。
+
+backendのターミナルで確認：
+
+```bash
+uv run pytest tests/integration/test_initial_schema.py -k model_metadata -q
+uv run pytest tests/unit -q
+uv run --env-file .env.example pytest tests/integration/test_database.py -q
+uv run --env-file .env.example pytest tests/integration/test_initial_schema.py -q --tb=no
+uv run ruff check app/infrastructure/models.py
+uv run python scripts/recover_test_schema.py inspect
+```
+
+既存のモデルテストは変更せず、実装前97 failedから実装後97 passedになった。既存ユニット95件・DBライフサイクル10件も成功。全体は102 passed / 36 failedで、残りはAlembic設定・マイグレーション未実装による失敗。8表と2つの明示的インデックスについてMySQL向けDDL文字列への変換も成功したが、SQL文字列を作れることは実DBで適用・制約検証できたこととは別。Ruff成功、最終DB確認は空。T014・T015には未着手。
+
 ## 補足：復旧スクリプトの初回検証記録（2026-09-11）
 
 `backend`で以下を実行した。
