@@ -288,14 +288,14 @@ uv run --env-file .env.example pytest tests/integration/test_initial_schema.py
 
 ## 11. T012：マイグレーションテスト（2026-09-15）
 
-対象は`backend/tests/integration/test_initial_schema.py`。製品モデルを使ってテーブルを先に作らず、初期リビジョンの`upgrade()`をAlembicの操作環境で実行し、MySQL上の構造を調べる。T014の設定ファイル・CLIの動作や適用バージョン記録まで検証するものではない。
+対象は`backend/tests/integration/test_initial_schema.py`。2026-09-16にConstitution V（シンプルさ）・VI（可読性）に照らして見直し、独自のファイル読み込みと直接の`upgrade()`呼び出しを、標準の`command.upgrade(config, "head")`へ置き換えた。製品モデルからテーブルを先に作らず、Alembicの設定・リビジョン探索・適用履歴記録を通して実DBを検証する。CLIそのものとdowngradeは対象外。T014・T015は未実装なので、実際の適用成功はまだ検証していない。
 
 ### データの受け渡し
 
 1. pytestが既存の`database_engine` fixtureで専用DBへの接続を確認する。
 2. `migrated_schema` fixtureは、そのEngineを使う`apply_initial_migration`関数を返す。fixtureの準備時点ではマイグレーションを実行しない。
-3. テストが`with migrated_schema() as connection:`を実行すると、初期ファイルの存在確認、既存テーブル・ビューとの衝突確認を行う。
-4. 設定した接続を`MigrationContext`、続いて`Operations.context`へ渡す。その中でリビジョンの`upgrade()`を呼ぶため、リビジョン内の`op.create_table()`等はこの接続を使う。
+3. テストが`with migrated_schema() as connection:`を実行すると、既存テーブル・ビューとの衝突確認を行う。
+4. `Config`はAlembicの設定を持つオブジェクト。`config.attributes["connection"] = connection`で専用DBの接続を渡し、`command.upgrade(config, "head")`で最新まで適用する。`command`はAlembicの操作モジュール、`upgrade`は適用関数、`"head"`は最新リビジョンの指定。T014の`env.py`が渡された接続を使う必要がある（まだ未実装）。独自にPythonファイルを読み込む処理は不要。
 5. 初期データをcommitした後、`yield connection`でテストへ接続を渡す。テストはInspectorで構造を読むか、別のトランザクション内で実データを保存して制約を確認する。
 6. ブロックの終了・失敗時に`finally`へ戻り、行操作をrollbackし、今回作った既知の対象だけを依存順に削除する。既存対象がある場合はこの処理へ入る前に止まる。DDL失敗で片付けられなければエラーを隠さず復旧手順へ引き継ぐ。
 
@@ -313,9 +313,9 @@ uv run ruff check tests/integration/test_initial_schema.py
 uv run python scripts/recover_test_schema.py inspect
 ```
 
-結果：全体132 failed / 5 passed。定義不足と初期リビジョン不在によるRedで、収集・fixture準備エラーではない。モデルとの一致確認8件はモデル不在で先に停止する。実際の製品テーブルの検証まで到達したわけではなく、T013-T015で引き続き確認する。
+2026-09-15の旧方式では132 failed / 5 passed。2026-09-16の標準方式への変更後は133 failed / 5 passed（モデル97件、マイグレーション36件、安全確認5件）。追加した1件は`alembic_version`の値と最新リビジョンの一致確認で、表の存在確認だけでは見逃す履歴記録の不備を検出する。モデルとの一致確認8件はモデル不在で先に停止し、他のマイグレーション検証も前提ファイル不足で停止する。製品のDB制約を実際に確認できたとは扱わず、T013-T015で引き続き確認する。
 
-`harness`はテストの準備・後片付け自体を検証する5件。pytestの一時フォルダに最小リビジョンを作り、専用DBに検証用ガード表を作成して、成功時・適用失敗時・テスト失敗時の削除と、既存対象・無関係なテーブルの保持を確認した。検証用の表と行は後片付け済みで再実行により再作成できる。製品のマイグレーションファイルは作成していない。
+`harness`はテストの準備・後片付け自体を検証する5件。`monkeypatch.setattr(command, "upgrade", create_probe_table)`で、この5件だけ実行関数を差し替える。関数へ渡された`config.attributes["connection"]`から接続を取り出し、専用DBに検証用ガード表を作る。成功時・適用失敗時・テスト失敗時の削除と、既存対象・無関係なテーブルの保持を確認する。仮のPythonファイル生成は廃止し、安全性の検証目的は保持した。この5件の成功は本物のAlembic実行成功を意味しない。検証用の表と行は後片付け済みで再実行により再作成できる。製品のマイグレーションファイルは作成していない。
 
 既存のユニット・DBライフサイクルテスト105件、Ruffは成功。最終の読み取り確認は`{}`で、テストDBに表が残っていないことを確認した。これは復旧スクリプトのバックアップ・復元の往復検証とは別。
 

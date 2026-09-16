@@ -1,15 +1,14 @@
 """T012: verify independent model definitions and actual migration-created tables."""
 
-import importlib.util
-import sys
 from collections.abc import Callable, Iterator
 from contextlib import AbstractContextManager, contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
-from alembic.migration import MigrationContext
-from alembic.operations import Operations
+from alembic import command
+from alembic.config import Config
+from alembic.script import ScriptDirectory
 from sqlalchemy import Enum, MetaData, Table, UniqueConstraint, inspect, text
 from sqlalchemy.dialects import mysql
 from sqlalchemy.engine import Connection, Engine
@@ -63,9 +62,7 @@ EXPECTED_HISTORY_FIELDS = {
     "result_run_id",
 }
 
-INITIAL_MIGRATION = (
-    Path(__file__).resolve().parents[2] / "migrations/versions/001_initial_schema.py"
-)
+BACKEND_ROOT = Path(__file__).resolve().parents[2]
 SCHEMA_DROP_ORDER = (
     "evolution_step_history", "dataset_input", "best_step_metric", "run_parameter",
     "run_snapshot", "evolution_step", "run_reference", "lineage_mutation_guard",
@@ -297,10 +294,9 @@ def migrated_schema(database_engine: Engine) -> Callable[[], AbstractContextMana
             A connection for assertions and rollback-only test row operations.
 
         Raises:
-            AssertionError: A revision is absent or pre-existing targets are found.
+            AssertionError: Pre-existing migration targets are found.
             Exception: Migration or cleanup fails; errors are never suppressed.
         """
-        assert INITIAL_MIGRATION.is_file(), "T015 must provide 001_initial_schema.py"
         with database_engine.connect() as connection:
             before = set(inspect(connection).get_table_names())
             before_views = set(inspect(connection).get_view_names())
@@ -308,17 +304,11 @@ def migrated_schema(database_engine: Engine) -> Callable[[], AbstractContextMana
             assert not conflicts, f"{RECOVERY_HINT} Found: {sorted(conflicts)}"
             connection.rollback()
 
-            spec = importlib.util.spec_from_file_location("t012_initial_revision", INITIAL_MIGRATION)
-            assert spec is not None and spec.loader is not None
-            revision = importlib.util.module_from_spec(spec)
-            # Include module execution in cleanup in case an invalid revision
-            # performs DDL while being imported. Only known new targets are owned.
+            config = Config(str(BACKEND_ROOT / "alembic.ini"))
+            config.set_main_option("script_location", str(BACKEND_ROOT / "migrations"))
+            config.attributes["connection"] = connection
             try:
-                spec.loader.exec_module(revision)
-                assert callable(getattr(revision, "upgrade", None)), "Revision requires upgrade()"
-                context = MigrationContext.configure(connection)
-                with Operations.context(context):
-                    revision.upgrade()
+                command.upgrade(config, "head")
                 connection.commit()
                 yield connection
             finally:
@@ -352,7 +342,7 @@ def test_migration_table_structure(
     """
     with migrated_schema() as connection:
         inspector = inspect(connection)
-        assert set(inspector.get_table_names()) == set(EXPECTED_COLUMNS)
+        assert set(inspector.get_table_names()) == set(EXPECTED_COLUMNS) | {"alembic_version"}
         assert {column["name"] for column in inspector.get_columns(table_name)} == EXPECTED_COLUMNS[table_name]
         assert tuple(inspector.get_pk_constraint(table_name)["constrained_columns"]) == primary_key
         assert inspector.get_table_options(table_name)["mysql_engine"] == "InnoDB"
@@ -368,6 +358,22 @@ def test_migration_guard_seed(
     """
     with migrated_schema() as connection:
         assert list(connection.scalars(text("SELECT id FROM lineage_mutation_guard"))) == [1]
+
+
+def test_migration_records_current_head(
+    migrated_schema: Callable[[], AbstractContextManager[Connection]],
+) -> None:
+    """Verify standard upgrade records the applied revision, not only tables.
+
+    Args:
+        migrated_schema: Context applying migrations through Alembic.
+    """
+    with migrated_schema() as connection:
+        config = Config(str(BACKEND_ROOT / "alembic.ini"))
+        config.set_main_option("script_location", str(BACKEND_ROOT / "migrations"))
+        head = ScriptDirectory.from_config(config).get_current_head()
+        assert head is not None, "T015 must supply an initial revision"
+        assert list(connection.scalars(text("SELECT version_num FROM alembic_version"))) == [head]
 
 
 @pytest.mark.parametrize("table_name", EXPECTED_COLUMNS)
@@ -609,40 +615,41 @@ def test_migration_rejects_invalid_child_rows(
 
 
 @pytest.fixture
-def probe_revision(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    """Supply a disposable revision solely to verify the test harness itself.
+def probe_upgrade(monkeypatch: pytest.MonkeyPatch) -> Callable[[Config, str], None]:
+    """Replace upgrade only for cleanup tests; real migration tests never use it.
 
     Args:
-        tmp_path: Pytest's temporary directory, not the production migration tree.
-        monkeypatch: Restores the initial revision path after this test.
+        monkeypatch: Restores Alembic's command after this test.
 
     Returns:
-        Path of a minimal revision creating only the known guard table.
+        Function creating one owned table using the supplied test connection.
     """
-    path = tmp_path / "probe_revision.py"
-    path.write_text(
-        'from alembic import op\n'
-        'import sqlalchemy as sa\n\n'
-        'def upgrade() -> None:\n'
-        '    """Create one disposable table for harness verification."""\n'
-        '    op.create_table("lineage_mutation_guard", sa.Column("id", sa.Integer(), primary_key=True))\n',
-        encoding="utf-8",
-    )
-    monkeypatch.setattr(sys.modules[__name__], "INITIAL_MIGRATION", path)
-    return path
+    def create_probe_table(config: Config, revision: str) -> None:
+        """Simulate successful DDL without loading a Python file.
+
+        Args:
+            config: Configuration containing the validated test connection.
+            revision: Requested target, expected to be head.
+        """
+        assert revision == "head"
+        connection = config.attributes["connection"]
+        connection.execute(text("CREATE TABLE lineage_mutation_guard (id INT PRIMARY KEY) ENGINE=InnoDB"))
+
+    monkeypatch.setattr(command, "upgrade", create_probe_table)
+    return create_probe_table
 
 
 def test_migration_harness_cleans_after_success(
     migrated_schema: Callable[[], AbstractContextManager[Connection]],
     database_engine: Engine,
-    probe_revision: Path,
+    probe_upgrade: Callable[[Config, str], None],
 ) -> None:
     """Verify a successful revision is applied and its table is cleaned up.
 
     Args:
         migrated_schema: Context under test.
         database_engine: Dedicated test engine for independent observations.
-        probe_revision: Disposable revision selected by the fixture.
+        probe_upgrade: Replacement command creating an owned probe table.
     """
     with migrated_schema() as connection:
         assert "lineage_mutation_guard" in inspect(connection).get_table_names()
@@ -652,17 +659,31 @@ def test_migration_harness_cleans_after_success(
 def test_migration_harness_cleans_after_upgrade_failure(
     migrated_schema: Callable[[], AbstractContextManager[Connection]],
     database_engine: Engine,
-    probe_revision: Path,
+    probe_upgrade: Callable[[Config, str], None],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Verify cleanup covers partial DDL before upgrade raises an exception.
 
     Args:
         migrated_schema: Context under test.
         database_engine: Dedicated engine for observing cleanup.
-        probe_revision: Temporary revision extended with an intentional failure.
+        probe_upgrade: Replacement command creating an owned probe table.
+        monkeypatch: Restores the command after simulating partial failure.
     """
-    with probe_revision.open("a", encoding="utf-8") as output:
-        output.write('    raise RuntimeError("probe upgrade failed")\n')
+    def failing_upgrade(config: Config, revision: str) -> None:
+        """Fail after DDL to verify partial-migration cleanup.
+
+        Args:
+            config: Configuration containing the test connection.
+            revision: Requested migration target.
+
+        Raises:
+            RuntimeError: Always, after creating the probe table.
+        """
+        probe_upgrade(config, revision)
+        raise RuntimeError("probe upgrade failed")
+
+    monkeypatch.setattr(command, "upgrade", failing_upgrade)
     with pytest.raises(RuntimeError, match="probe upgrade failed"), migrated_schema():
         pytest.fail("Failed upgrade must not yield a connection")
     assert "lineage_mutation_guard" not in inspect(database_engine).get_table_names()
@@ -671,14 +692,14 @@ def test_migration_harness_cleans_after_upgrade_failure(
 def test_migration_harness_cleans_after_test_failure(
     migrated_schema: Callable[[], AbstractContextManager[Connection]],
     database_engine: Engine,
-    probe_revision: Path,
+    probe_upgrade: Callable[[Config, str], None],
 ) -> None:
     """Verify failed test assertions cannot bypass schema teardown.
 
     Args:
         migrated_schema: Context under test.
         database_engine: Dedicated engine for observing cleanup.
-        probe_revision: Disposable revision selected by the fixture.
+        probe_upgrade: Replacement command creating an owned probe table.
     """
     with pytest.raises(AssertionError, match="probe assertion"), migrated_schema():
         raise AssertionError("probe assertion")
@@ -688,14 +709,14 @@ def test_migration_harness_cleans_after_test_failure(
 def test_migration_harness_preserves_existing_target(
     migrated_schema: Callable[[], AbstractContextManager[Connection]],
     database_engine: Engine,
-    probe_revision: Path,
+    probe_upgrade: Callable[[Config, str], None],
 ) -> None:
     """Reject an occupied target before migration without deleting its data.
 
     Args:
         migrated_schema: Context expected to reject the simulated existing table.
         database_engine: Dedicated engine preparing an owned sentinel table.
-        probe_revision: Revision which must never execute in this case.
+        probe_upgrade: Command which must never execute in this case.
     """
     inspector = inspect(database_engine)
     assert "lineage_mutation_guard" not in set(inspector.get_table_names()) | set(inspector.get_view_names()), RECOVERY_HINT
@@ -717,7 +738,7 @@ def test_migration_harness_preserves_existing_target(
 def test_migration_harness_preserves_unrelated_table(
     migrated_schema: Callable[[], AbstractContextManager[Connection]],
     database_engine: Engine,
-    probe_revision: Path,
+    probe_upgrade: Callable[[Config, str], None],
     probe_table: Table,
 ) -> None:
     """Leave an unrelated T010 fixture table intact after migration cleanup.
@@ -725,7 +746,7 @@ def test_migration_harness_preserves_unrelated_table(
     Args:
         migrated_schema: Context under test.
         database_engine: Dedicated engine for observing preserved tables.
-        probe_revision: Disposable revision creating the guard table.
+        probe_upgrade: Replacement command creating an owned probe table.
         probe_table: Independently owned temporary table from the T010 fixture.
     """
     with migrated_schema():
