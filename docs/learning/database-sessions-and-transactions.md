@@ -315,7 +315,9 @@ uv run python scripts/recover_test_schema.py inspect
 
 2026-09-15の旧方式では132 failed / 5 passed。2026-09-16の標準方式への変更後は133 failed / 5 passed（モデル97件、マイグレーション36件、安全確認5件）。追加した1件は`alembic_version`の値と最新リビジョンの一致確認で、表の存在確認だけでは見逃す履歴記録の不備を検出する。モデルとの一致確認8件はモデル不在で先に停止し、他のマイグレーション検証も前提ファイル不足で停止する。製品のDB制約を実際に確認できたとは扱わず、T013-T015で引き続き確認する。
 
-`harness`はテストの準備・後片付け自体を検証する5件。`monkeypatch.setattr(command, "upgrade", create_probe_table)`で、この5件だけ実行関数を差し替える。関数へ渡された`config.attributes["connection"]`から接続を取り出し、専用DBに検証用ガード表を作る。成功時・適用失敗時・テスト失敗時の削除と、既存対象・無関係なテーブルの保持を確認する。仮のPythonファイル生成は廃止し、安全性の検証目的は保持した。この5件の成功は本物のAlembic実行成功を意味しない。検証用の表と行は後片付け済みで再実行により再作成できる。製品のマイグレーションファイルは作成していない。
+`harness`はテストの準備・後片付け自体を検証する5件。各テスト内に差し替え関数を定義し、`monkeypatch.setattr(command, "upgrade", 関数)`を一度だけ実行する。差し替えるfixtureから関数を返して再度差し替える仕組みは廃止した。短いテーブル作成SQLの重複は、各テストだけで準備・実行・確認を追えるよう意図的に許容する。共通のDB接続と、検証対象の`migrated_schema`は共有する。
+
+途中失敗の例では、テスト内の`failing_upgrade`を設定 → `with migrated_schema()` → `apply_initial_migration()`内の`command.upgrade(config, "head")` → `failing_upgrade(config, "head")`の順で進む。`config.attributes["connection"]`から接続を取り出して表を作り、その場でRuntimeErrorを出す。呼び出し元の`finally`が表を片付けた後に、テストの`pytest.raises`が例外を確認する。最後にDBから取得した`remaining_table_names`に対象名がないことを確認する。既存対象のテストだけは、適用関数へ到達したら`pytest.fail`にする。成功時・適用失敗時・テスト失敗時の削除と、既存対象・無関係なテーブルの保持という5つの検証目的は変えない。この5件の成功は本物のAlembic実行成功を意味しない。製品のマイグレーションファイルは作成していない。
 
 既存のユニット・DBライフサイクルテスト105件、Ruffは成功。最終の読み取り確認は`{}`で、テストDBに表が残っていないことを確認した。これは復旧スクリプトのバックアップ・復元の往復検証とは別。
 

@@ -614,18 +614,20 @@ def test_migration_rejects_invalid_child_rows(
         connection.rollback()
 
 
-@pytest.fixture
-def probe_upgrade(monkeypatch: pytest.MonkeyPatch) -> Callable[[Config, str], None]:
-    """Replace upgrade only for cleanup tests; real migration tests never use it.
+def test_migration_harness_cleans_after_success(
+    migrated_schema: Callable[[], AbstractContextManager[Connection]],
+    database_engine: Engine,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Verify the owned table exists during the test and is removed afterward.
 
     Args:
-        monkeypatch: Restores Alembic's command after this test.
-
-    Returns:
-        Function creating one owned table using the supplied test connection.
+        migrated_schema: Migration and cleanup context under test.
+        database_engine: Dedicated engine for checking the final DB state.
+        monkeypatch: Restores the replaced upgrade command after this test.
     """
     def create_probe_table(config: Config, revision: str) -> None:
-        """Simulate successful DDL without loading a Python file.
+        """Create one table instead of running product migrations.
 
         Args:
             config: Configuration containing the validated test connection.
@@ -633,104 +635,139 @@ def probe_upgrade(monkeypatch: pytest.MonkeyPatch) -> Callable[[Config, str], No
         """
         assert revision == "head"
         connection = config.attributes["connection"]
-        connection.execute(text("CREATE TABLE lineage_mutation_guard (id INT PRIMARY KEY) ENGINE=InnoDB"))
+        connection.execute(text(
+            "CREATE TABLE lineage_mutation_guard (id INT PRIMARY KEY) ENGINE=InnoDB"
+        ))
 
     monkeypatch.setattr(command, "upgrade", create_probe_table)
-    return create_probe_table
 
-
-def test_migration_harness_cleans_after_success(
-    migrated_schema: Callable[[], AbstractContextManager[Connection]],
-    database_engine: Engine,
-    probe_upgrade: Callable[[Config, str], None],
-) -> None:
-    """Verify a successful revision is applied and its table is cleaned up.
-
-    Args:
-        migrated_schema: Context under test.
-        database_engine: Dedicated test engine for independent observations.
-        probe_upgrade: Replacement command creating an owned probe table.
-    """
     with migrated_schema() as connection:
-        assert "lineage_mutation_guard" in inspect(connection).get_table_names()
-    assert "lineage_mutation_guard" not in inspect(database_engine).get_table_names()
+        table_names = inspect(connection).get_table_names()
+        assert "lineage_mutation_guard" in table_names
+
+    remaining_table_names = inspect(database_engine).get_table_names()
+    assert "lineage_mutation_guard" not in remaining_table_names
 
 
 def test_migration_harness_cleans_after_upgrade_failure(
     migrated_schema: Callable[[], AbstractContextManager[Connection]],
     database_engine: Engine,
-    probe_upgrade: Callable[[Config, str], None],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Verify cleanup covers partial DDL before upgrade raises an exception.
+    """Verify a table created before an upgrade failure is still removed.
 
     Args:
-        migrated_schema: Context under test.
-        database_engine: Dedicated engine for observing cleanup.
-        probe_upgrade: Replacement command creating an owned probe table.
-        monkeypatch: Restores the command after simulating partial failure.
+        migrated_schema: Migration and cleanup context under test.
+        database_engine: Dedicated engine for checking the final DB state.
+        monkeypatch: Restores the replaced upgrade command after this test.
     """
     def failing_upgrade(config: Config, revision: str) -> None:
-        """Fail after DDL to verify partial-migration cleanup.
+        """Create one table, then fail to simulate partial migration.
 
         Args:
-            config: Configuration containing the test connection.
-            revision: Requested migration target.
+            config: Configuration containing the validated test connection.
+            revision: Requested target, expected to be head.
 
         Raises:
             RuntimeError: Always, after creating the probe table.
         """
-        probe_upgrade(config, revision)
+        assert revision == "head"
+        connection = config.attributes["connection"]
+        connection.execute(text(
+            "CREATE TABLE lineage_mutation_guard (id INT PRIMARY KEY) ENGINE=InnoDB"
+        ))
         raise RuntimeError("probe upgrade failed")
 
     monkeypatch.setattr(command, "upgrade", failing_upgrade)
-    with pytest.raises(RuntimeError, match="probe upgrade failed"), migrated_schema():
-        pytest.fail("Failed upgrade must not yield a connection")
-    assert "lineage_mutation_guard" not in inspect(database_engine).get_table_names()
+
+    with pytest.raises(RuntimeError, match="probe upgrade failed"):  # noqa: SIM117 - Show the exception boundary around context entry.
+        with migrated_schema():
+            pytest.fail("Failed upgrade must not yield a connection")
+
+    remaining_table_names = inspect(database_engine).get_table_names()
+    assert "lineage_mutation_guard" not in remaining_table_names
 
 
 def test_migration_harness_cleans_after_test_failure(
     migrated_schema: Callable[[], AbstractContextManager[Connection]],
     database_engine: Engine,
-    probe_upgrade: Callable[[Config, str], None],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Verify failed test assertions cannot bypass schema teardown.
+    """Verify failure inside the test body still triggers table cleanup.
 
     Args:
-        migrated_schema: Context under test.
-        database_engine: Dedicated engine for observing cleanup.
-        probe_upgrade: Replacement command creating an owned probe table.
+        migrated_schema: Migration and cleanup context under test.
+        database_engine: Dedicated engine for checking the final DB state.
+        monkeypatch: Restores the replaced upgrade command after this test.
     """
-    with pytest.raises(AssertionError, match="probe assertion"), migrated_schema():
-        raise AssertionError("probe assertion")
-    assert "lineage_mutation_guard" not in inspect(database_engine).get_table_names()
+    def create_probe_table(config: Config, revision: str) -> None:
+        """Create one table before the test body raises an exception.
+
+        Args:
+            config: Configuration containing the validated test connection.
+            revision: Requested target, expected to be head.
+        """
+        assert revision == "head"
+        connection = config.attributes["connection"]
+        connection.execute(text(
+            "CREATE TABLE lineage_mutation_guard (id INT PRIMARY KEY) ENGINE=InnoDB"
+        ))
+
+    monkeypatch.setattr(command, "upgrade", create_probe_table)
+
+    with pytest.raises(AssertionError, match="probe assertion"):  # noqa: SIM117 - Separate expected failure from the context under test.
+        with migrated_schema() as connection:
+            table_names = inspect(connection).get_table_names()
+            assert "lineage_mutation_guard" in table_names
+            raise AssertionError("probe assertion")
+
+    remaining_table_names = inspect(database_engine).get_table_names()
+    assert "lineage_mutation_guard" not in remaining_table_names
 
 
 def test_migration_harness_preserves_existing_target(
     migrated_schema: Callable[[], AbstractContextManager[Connection]],
     database_engine: Engine,
-    probe_upgrade: Callable[[Config, str], None],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Reject an occupied target before migration without deleting its data.
+    """Reject an occupied target without running upgrade or deleting its row.
 
     Args:
-        migrated_schema: Context expected to reject the simulated existing table.
+        migrated_schema: Context expected to reject the existing target.
         database_engine: Dedicated engine preparing an owned sentinel table.
-        probe_upgrade: Command which must never execute in this case.
+        monkeypatch: Restores the replaced upgrade command after this test.
     """
+    def unexpected_upgrade(config: Config, revision: str) -> None:
+        """Fail if upgrade is reached despite the existing target.
+
+        Args:
+            config: Configuration that must not be used for migration.
+            revision: Migration target that must not be applied.
+        """
+        pytest.fail("Upgrade must not run when a target already exists")
+
+    monkeypatch.setattr(command, "upgrade", unexpected_upgrade)
+
     inspector = inspect(database_engine)
-    assert "lineage_mutation_guard" not in set(inspector.get_table_names()) | set(inspector.get_view_names()), RECOVERY_HINT
+    existing_names = set(inspector.get_table_names()) | set(inspector.get_view_names())
+    assert "lineage_mutation_guard" not in existing_names, RECOVERY_HINT
     with database_engine.begin() as connection:
-        connection.execute(text("CREATE TABLE lineage_mutation_guard (id INT PRIMARY KEY) ENGINE=InnoDB"))
+        connection.execute(text(
+            "CREATE TABLE lineage_mutation_guard (id INT PRIMARY KEY) ENGINE=InnoDB"
+        ))
     try:
         with database_engine.begin() as connection:
             connection.execute(text("INSERT INTO lineage_mutation_guard (id) VALUES (77)"))
-        with pytest.raises(AssertionError, match="Existing migration targets"), migrated_schema():
-            pytest.fail("Existing targets must be rejected")
+
+        with pytest.raises(AssertionError, match="Existing migration targets"):  # noqa: SIM117 - Show rejection during context entry.
+            with migrated_schema():
+                pytest.fail("Existing targets must be rejected")
+
         with database_engine.connect() as connection:
-            assert list(connection.scalars(text("SELECT id FROM lineage_mutation_guard"))) == [77]
+            remaining_ids = list(connection.scalars(text("SELECT id FROM lineage_mutation_guard")))
+            assert remaining_ids == [77]
     finally:
-        # This outer test created the sentinel; the migration context must not.
+        # Only this outer test owns the sentinel table and may remove it.
         with database_engine.begin() as connection:
             connection.execute(text("DROP TABLE lineage_mutation_guard"))
 
@@ -738,17 +775,37 @@ def test_migration_harness_preserves_existing_target(
 def test_migration_harness_preserves_unrelated_table(
     migrated_schema: Callable[[], AbstractContextManager[Connection]],
     database_engine: Engine,
-    probe_upgrade: Callable[[Config, str], None],
+    monkeypatch: pytest.MonkeyPatch,
     probe_table: Table,
 ) -> None:
-    """Leave an unrelated T010 fixture table intact after migration cleanup.
+    """Keep an independently owned table while cleaning the migration table.
 
     Args:
-        migrated_schema: Context under test.
-        database_engine: Dedicated engine for observing preserved tables.
-        probe_upgrade: Replacement command creating an owned probe table.
-        probe_table: Independently owned temporary table from the T010 fixture.
+        migrated_schema: Migration and cleanup context under test.
+        database_engine: Dedicated engine for checking the final DB state.
+        monkeypatch: Restores the replaced upgrade command after this test.
+        probe_table: Unrelated table independently owned by the T010 fixture.
     """
-    with migrated_schema():
-        assert probe_table.name in inspect(database_engine).get_table_names()
-    assert probe_table.name in inspect(database_engine).get_table_names()
+    def create_probe_table(config: Config, revision: str) -> None:
+        """Create only the migration-owned table, leaving probe_table alone.
+
+        Args:
+            config: Configuration containing the validated test connection.
+            revision: Requested target, expected to be head.
+        """
+        assert revision == "head"
+        connection = config.attributes["connection"]
+        connection.execute(text(
+            "CREATE TABLE lineage_mutation_guard (id INT PRIMARY KEY) ENGINE=InnoDB"
+        ))
+
+    monkeypatch.setattr(command, "upgrade", create_probe_table)
+
+    with migrated_schema() as connection:
+        table_names = inspect(connection).get_table_names()
+        assert probe_table.name in table_names
+        assert "lineage_mutation_guard" in table_names
+
+    remaining_table_names = inspect(database_engine).get_table_names()
+    assert probe_table.name in remaining_table_names
+    assert "lineage_mutation_guard" not in remaining_table_names
