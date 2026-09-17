@@ -554,7 +554,7 @@ def test_migration_snapshot_signed_step_and_datetime_round_trip(
             ), {"run_id": run_id, "step": step, "now": SAMPLE_TIME})
             actual = connection.execute(text(
                 "SELECT s.best_accuracy_step, m.step, s.captured_at, m.recorded_at "
-                "FROM run_snapshot s JOIN best_step_metric m ON s.run_id=m.run_id "
+                "FROM run_snapshot AS s JOIN best_step_metric AS m ON s.run_id=m.run_id "
                 "WHERE s.run_id=:run_id"
             ), {"run_id": run_id}).one()
             assert tuple(actual) == (step, step, SAMPLE_TIME, SAMPLE_TIME)
