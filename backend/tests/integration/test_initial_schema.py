@@ -9,7 +9,7 @@ import pytest
 from alembic import command
 from alembic.config import Config
 from alembic.script import ScriptDirectory
-from sqlalchemy import Enum, MetaData, Table, UniqueConstraint, inspect, text
+from sqlalchemy import Enum, MetaData, String, Table, UniqueConstraint, inspect, text
 from sqlalchemy.dialects import mysql
 from sqlalchemy.engine import Connection, Engine
 from sqlalchemy.exc import IntegrityError
@@ -395,7 +395,12 @@ def test_migration_matches_validated_model_columns_and_constraints(
         for column in expected.columns:
             stored = actual.c[column.name]
             assert stored.nullable == column.nullable, column.name
-            assert stored.type.compile(dialect=mysql.dialect()) == column.type.compile(dialect=mysql.dialect()), column.name
+            # MySQL reflection includes the inherited table collation on each
+            # text column. Include it in the expectation rather than ignore it.
+            expected_type = column.type.copy()
+            if isinstance(expected_type, String) and expected_type.collation is None:
+                expected_type.collation = expected.dialect_options["mysql"]["collate"]
+            assert stored.type.compile(dialect=mysql.dialect()) == expected_type.compile(dialect=mysql.dialect()), column.name
             assert {key.target_fullname for key in stored.foreign_keys} == {
                 key.target_fullname for key in column.foreign_keys
             }, column.name

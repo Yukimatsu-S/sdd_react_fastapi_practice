@@ -367,6 +367,30 @@ uv run --env-file .env.example alembic -x database=test revision --autogenerate 
 
 既存ユニット・DBライフサイクル105件成功。スキーマ全体102 passed / 36 failedは、env.pyの読み込みは通ったがT015の製品リビジョンが未作成のため。Ruff成功、最終DBは空。製品テーブルへの適用・制約確認は未実施。
 
+## 14. T015：初期マイグレーションの適用（2026-09-17）
+
+`backend/migrations/versions/001_initial_schema.py`を自動生成後に確認・整形し、ガード行の挿入を明示的に追加した。revisionは`001`、初版なのでdown_revisionはNone。現在のmodels.pyを直接呼んでテーブルを作るのではなく、このリビジョン時点の列・型・制約をファイルに保持する。将来モデルが変わっても、過去のマイグレーションの内容が変わらないため。
+
+テストからの流れ：`with migrated_schema()` → 専用接続をconfigへ格納 → `command.upgrade(config, "head")` → env.py → `run_with_connection()` → `context.run_migrations()` → 001の`upgrade()`。`from alembic import op`で取得するopは、現在のAlembic実行環境の操作を提供するモジュール。`op.create_table("表名", sa.Column(...), ...)`が接続先MySQLへCREATE TABLEを実行する。saは`import sqlalchemy as sa`という別名。`op.execute(sa.text("INSERT INTO lineage_mutation_guard (id) VALUES (1)"))`が初期行を挿入する。処理が戻るとテストへ接続が渡り、実DBの構造・保存時の制約を確認する。テスト終了後は今回作った表のみ片付ける。
+
+backendのターミナルで実行した主なコマンド：
+
+```bash
+uv run --env-file .env.example pytest tests/integration/test_initial_schema.py -k migration_guard_seed -q --tb=short
+uv run --env-file .env.example alembic -x database=test revision --autogenerate -m initial_schema --rev-id 001
+uv run ruff format migrations/versions/001_initial_schema.py
+uv run ruff check --fix migrations/versions/001_initial_schema.py
+uv run --env-file .env.example pytest tests/integration/test_initial_schema.py tests/integration/test_database.py tests/unit -q --tb=short
+uv run ruff check migrations/versions/001_initial_schema.py tests/integration/test_initial_schema.py
+uv run python scripts/recover_test_schema.py inspect
+```
+
+生成コマンドは初回のみ。既に001がある状態で再実行しない。自動生成で作られた空のalembic_version表は、開始前が空であることと、終了後にその表だけ・0行であることを確認して削除し、テストを開始した。予期しない状態なら自動削除せずsection 10へ進む。通常の検証再実行は上記pytestコマンドを使う。
+
+実装前はガード表不在で失敗。最初の適用後は131 passed / 7 failedで、MySQLが文字列型へ付加して返すCOLLATEと、テーブル全体に指定したモデル設定の表現差が原因だった。型の期待値をコピーし、文字列型にテーブルの照合順序を補って比較するよう修正。照合順序を無視して成功させたわけではない。
+
+最終結果はスキーマ138件と既存105件、合計243 passed。Ruff成功。RuffはE128を直接指定できなかったため、VS CodeのFlake8拡張に同梱されたpycodestyleでE128を別途確認し成功した（プロジェクトへ依存追加なし）。最終DBは空。テストが作成した表・行は後片付け済みで、再実行で再作成できる。実DBへの適用・主キー・外部キー・一意制約・NULL・日時精度・符号付きstep・インデックス・適用履歴・初期ガード行を確認できた。一方、downgradeの往復検証、実サービスの更新・同期・不変性はこの結果には含まない。
+
 ## 補足：復旧スクリプトの初回検証記録（2026-09-11）
 
 `backend`で以下を実行した。
