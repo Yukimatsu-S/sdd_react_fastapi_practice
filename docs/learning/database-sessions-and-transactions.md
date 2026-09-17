@@ -342,6 +342,31 @@ uv run python scripts/recover_test_schema.py inspect
 
 既存のモデルテストは変更せず、実装前97 failedから実装後97 passedになった。既存ユニット95件・DBライフサイクル10件も成功。全体は102 passed / 36 failedで、残りはAlembic設定・マイグレーション未実装による失敗。8表と2つの明示的インデックスについてMySQL向けDDL文字列への変換も成功したが、SQL文字列を作れることは実DBで適用・制約検証できたこととは別。Ruff成功、最終DB確認は空。T014・T015には未着手。
 
+## 13. T014：Alembicへ定義と接続を渡す（2026-09-16）
+
+- `backend/alembic.ini`：マイグレーションの置き場所とPythonの読み込み先。`%(here)s`は設定ファイルのあるディレクトリ。認証情報は書かない。
+- `backend/migrations/env.py`：モデルのmetadataとDB接続をAlembicへ渡す。CLIでは環境変数を検証して接続を開き、終わったら閉じる。テストから接続を渡された場合はそのまま使用する。
+- `backend/migrations/script.py.mako`：revisionコマンドがPythonファイルを生成するときの雛形。`upgrade`・`downgrade`の型とdocstringも含む。
+- `backend/migrations/versions/.gitkeep`：まだリビジョンがないディレクトリをGitに残す空ファイル。Python処理ではない。
+
+CLIの流れ：alembic.ini → migrations/env.py → models.pyのmetadata → selected_database_url() → 既存の環境変数・URL検証 → create_engine() → engine.connect() → run_with_connection(connection) → context.configure(connection=..., target_metadata=metadata) → context.run_migrations()。実際の動作は呼び出したコマンドによって異なり、revision --autogenerateではDBと定義の差分から候補ファイルを生成する。upgradeではリビジョンを適用する。この2つを混同しない。
+
+既存T012テストの流れ：command.upgrade(config, "head") → env.pyのrun_online() → config.attributesから渡された接続を取得 → run_with_connection(connection)。この経路は環境変数から別接続を作らず、接続を閉じる責任も呼び出し側に残す。
+
+検証ではbackendのターミナルで次を実行した：
+
+```bash
+uv run --env-file .env.example alembic -x database=test revision --autogenerate -m smoke --rev-id smoke
+```
+
+`uv run`はプロジェクト環境で実行、`--env-file .env.example`は環境変数を明示的に読み込み、`alembic`は実行するツール。`-x database=test`はenv.pyへ渡す追加指定で、テストDBを選ぶ。`revision`は変更ファイル作成、`--autogenerate`はDBとの差分を自動生成、`-m smoke`は説明文、`--rev-id smoke`は検証用ID。通常DBは-x省略時のMONDEL_DATABASE_URLであり、テスト用URLへ暗黙にフォールバックしない。
+
+実装前は設定不足で失敗し、実装後はsmoke_smoke.pyに8表と2インデックスが生成された。これはT015の完成品ではなく、ガード行の初期値挿入も自動生成されない。適用せず内容を確認後、今回生成したファイルを削除した。生成処理が作った空のalembic_version表も、実行前DBが空だった記録と実行後の対象・0行を確認して削除した。必要なら同じ生成操作で再作成できる。
+
+再検証はT015追加前の専用・排他・空DBに限る。開始前にsection 11のinspectコマンドで空を確認する。予期しない表やデータがあれば停止し、section 10の確認・バックアップ・復旧手順を使う。T015以降は固定smoke IDでこの初回検証を繰り返さず、その時点の適用済み履歴を確認する。
+
+既存ユニット・DBライフサイクル105件成功。スキーマ全体102 passed / 36 failedは、env.pyの読み込みは通ったがT015の製品リビジョンが未作成のため。Ruff成功、最終DBは空。製品テーブルへの適用・制約確認は未実施。
+
 ## 補足：復旧スクリプトの初回検証記録（2026-09-11）
 
 `backend`で以下を実行した。
