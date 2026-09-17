@@ -1,13 +1,28 @@
 """Opt-in shared MySQL fixtures; unit tests do not request a DB connection."""
 
+from collections.abc import Iterator
 from uuid import uuid4
 
 import pytest
+from fastapi.testclient import TestClient
 from sqlalchemy import Column, Integer, MetaData, Table, create_engine, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.config import load_settings
+
+
+@pytest.fixture
+def client() -> Iterator[TestClient]:
+    """Provide an HTTP client for the actual application without a live server.
+
+    Yields:
+        TestClient: Client that returns server errors as HTTP responses.
+    """
+    from main import app
+
+    with TestClient(app, raise_server_exceptions=False) as test_client:
+        yield test_client
 
 
 @pytest.fixture(scope="session")
