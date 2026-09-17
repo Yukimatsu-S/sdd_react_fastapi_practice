@@ -1,6 +1,31 @@
 """Verify the public API error contract through the actual application."""
 
+import json
+
 from fastapi.testclient import TestClient
+from starlette.requests import Request
+
+from app.api.errors import ApiError, api_error_handler
+
+
+def test_direct_handler_preserves_error_and_trace_id() -> None:
+    """Preserve the supplied error information and request trace ID."""
+    request = Request({"type": "http"})
+    request.state.trace_id = "trace-test-001"
+    error = ApiError(
+        status_code=409,
+        code="result_run_conflict",
+        message="Result Run is already linked to another Evolution Step.",
+    )
+
+    response = api_error_handler(request, error)
+
+    assert response.status_code == 409
+    assert json.loads(response.body) == {
+        "code": "result_run_conflict",
+        "message": "Result Run is already linked to another Evolution Step.",
+        "traceId": "trace-test-001",
+    }
 
 
 def test_unknown_api_route_returns_error_envelope(client: TestClient) -> None:
