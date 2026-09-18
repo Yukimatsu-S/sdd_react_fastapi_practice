@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
 
-import { searchRuns, syncRun } from "./runs";
+import { ApiClientError } from "./client";
+import { isMlflowUnavailableError, searchRuns, syncRun } from "./runs";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -33,5 +34,29 @@ describe("sync", () => {
     expect(fetchMock).toHaveBeenCalledWith("/api/v1/runs/run-001/sync", {
       method: "POST",
     });
+  });
+
+  test("classifies the documented MLflow upstream failure", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            code: "mlflow_unavailable",
+            message: "MLflow Run could not be loaded.",
+            traceId: "trace-001",
+          }),
+          { status: 502 },
+        ),
+      ),
+    );
+
+    try {
+      await syncRun("run-001");
+      throw new Error("Expected syncRun to reject.");
+    } catch (error) {
+      expect(error).toBeInstanceOf(ApiClientError);
+      expect(isMlflowUnavailableError(error)).toBe(true);
+    }
   });
 });
