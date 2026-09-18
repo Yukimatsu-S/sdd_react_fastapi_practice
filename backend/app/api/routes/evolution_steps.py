@@ -10,6 +10,14 @@ from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_request_session
 from app.api.errors import ApiError
+from app.api.schemas.comparison import (
+    AccuracyComparisonResponse,
+    ComparisonResponse,
+    DatasetComparisonResponse,
+    DatasetDifferenceResponse,
+    DatasetIdentifierResponse,
+    ParameterDifferenceResponse,
+)
 from app.api.schemas.evolution_steps import (
     AccuracySummaryResponse,
     ComparisonSummaryResponse,
@@ -25,6 +33,7 @@ from app.api.schemas.evolution_steps import (
     RunSummaryResponse,
 )
 from app.config import load_settings
+from app.domain.comparison import Comparison
 from app.domain.lineage import LineageCycleError, ResultRunConflictError
 from app.domain.pagination import decode_cursor
 from app.infrastructure.database import transaction_scope
@@ -34,6 +43,7 @@ from app.infrastructure.evolution_step_repository import (
 )
 from app.infrastructure.mlflow_run_loader import MlflowRunLoader
 from app.infrastructure.run_repository import RunRepository, RunSnapshotRecord
+from app.services.comparison_service import ComparisonService
 from app.services.evolution_step_list_service import EvolutionStepListService
 from app.services.evolution_step_service import EvolutionStepService
 
@@ -137,6 +147,27 @@ def create_evolution_step(
         raise ApiError(422, "validation_error", str(error)) from error
 
 
+@router.get("/{evolutionStepId}/comparison", response_model=ComparisonResponse)
+def get_evolution_step_comparison(
+    evolution_step_id: Annotated[int, Path(alias="evolutionStepId", ge=1)],
+    session: SessionDependency,
+) -> ComparisonResponse:
+    """Return differences from the Step's immutable captured Run Snapshots.
+
+    Args:
+        evolution_step_id: Positive local Evolution Step identifier.
+        session: Request-scoped database Session.
+
+    Returns:
+        ComparisonResponse: Available differences or an explicit unavailable state.
+    """
+    try:
+        comparison = ComparisonService(session.connection()).get(evolution_step_id)
+        return _comparison_response(comparison)
+    except LookupError as error:
+        raise ApiError(404, "not_found", str(error)) from error
+
+
 @router.get("/{evolutionStepId}", response_model=EvolutionStepDetailResponse)
 def get_evolution_step(
     evolution_step_id: Annotated[int, Path(alias="evolutionStepId", ge=1)],
@@ -229,6 +260,52 @@ def _detail_response(
         ],
         created_at=step.created_at,
         updated_at=step.updated_at,
+    )
+
+
+def _comparison_response(comparison: Comparison) -> ComparisonResponse:
+    """Map a typed domain comparison to the public camelCase response schema.
+
+    Args:
+        comparison: Domain comparison assembled from immutable Snapshot values.
+
+    Returns:
+        ComparisonResponse: JSON-ready comparison response.
+    """
+    return ComparisonResponse(
+        status=comparison.status,
+        unavailable_reason=comparison.unavailable_reason,
+        parameters=[
+            ParameterDifferenceResponse(
+                name=item.name,
+                status=item.status,
+                parent_value=item.parent_value,
+                result_value=item.result_value,
+            )
+            for item in comparison.parameters
+        ],
+        accuracy=AccuracyComparisonResponse(**comparison.accuracy.__dict__),
+        datasets=DatasetComparisonResponse(
+            status=comparison.datasets.status,
+            unavailable_reason=comparison.datasets.unavailable_reason,
+            differences=[
+                DatasetDifferenceResponse(
+                    status=item.status,
+                    parent=(
+                        None
+                        if item.parent is None
+                        else DatasetIdentifierResponse(**item.parent.__dict__)
+                    ),
+                    result=(
+                        None
+                        if item.result is None
+                        else DatasetIdentifierResponse(**item.result.__dict__)
+                    ),
+                    changed_fields=list(item.changed_fields),
+                )
+                for item in comparison.datasets.differences
+            ],
+        ),
     )
 
 
