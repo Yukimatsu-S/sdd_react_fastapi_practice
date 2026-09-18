@@ -3,11 +3,14 @@
 import { useEffect, useState } from "react";
 
 import {
+  getComparison,
   getEvolutionStep,
+  type Comparison,
   type EvolutionStepDetail as EvolutionStepDetailData,
 } from "../api/evolutionSteps";
 import { getBestStepMetrics, syncRun, type BestStepMetricsResult } from "../api/runs";
 import { BestStepMetrics } from "../features/evolution-steps/BestStepMetrics";
+import { ComparisonPanel } from "../features/evolution-steps/ComparisonPanel";
 import { EvolutionStepDetail } from "../features/evolution-steps/EvolutionStepDetail";
 import { RunSyncStatus } from "../features/evolution-steps/RunSyncStatus";
 
@@ -26,6 +29,8 @@ export function EvolutionStepDetailPage({
 }: EvolutionStepDetailPageProps): React.JSX.Element {
   const [detail, setDetail] = useState<EvolutionStepDetailData | null>(null);
   const [metrics, setMetrics] = useState<BestStepMetricsResult[]>([]);
+  const [comparison, setComparison] = useState<Comparison | null>(null);
+  const [comparisonError, setComparisonError] = useState<string | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -40,6 +45,8 @@ export function EvolutionStepDetailPage({
           return;
         }
         setDetail(initial);
+        setComparison(null);
+        setComparisonError(null);
         const linkedRunIds = [initial.parentRun, initial.resultRun]
           .flatMap((linkedRun) => (linkedRun === null ? [] : [linkedRun.reference.runId]));
         const uniqueRunIds = [...new Set(linkedRunIds)];
@@ -68,6 +75,17 @@ export function EvolutionStepDetailPage({
             setWarning("Best-step Metrics could not be loaded. Showing saved local detail.");
           }
         }
+
+        try {
+          const loadedComparison = await getComparison(evolutionStepId);
+          if (active) {
+            setComparison(loadedComparison);
+          }
+        } catch {
+          if (active) {
+            setComparisonError("Comparison could not be loaded.");
+          }
+        }
       } catch {
         if (active) {
           setError("Evolution Step detail could not be loaded.");
@@ -92,6 +110,8 @@ export function EvolutionStepDetailPage({
     <main>
       {warning === null ? null : <RunSyncStatus state="failed" />}
       <EvolutionStepDetail detail={detail} />
+      {comparisonError === null ? null : <p role="alert">{comparisonError}</p>}
+      {comparison === null ? null : <ComparisonPanel comparison={comparison} />}
       {metrics.map((result) => (
         <BestStepMetrics key={result.runId} result={result} />
       ))}
