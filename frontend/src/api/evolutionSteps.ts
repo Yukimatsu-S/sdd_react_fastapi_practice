@@ -107,6 +107,42 @@ export type EvolutionStepListPage = {
   nextPageToken: string | null;
 };
 
+export type ParameterDifference = {
+  name: string;
+  status: "added" | "changed" | "removed";
+  parentValue: string | null;
+  resultValue: string | null;
+};
+
+export type DatasetIdentifier = {
+  name: string;
+  digest: string;
+  sourceType: string;
+  source: string;
+  context: string | null;
+};
+
+export type DatasetDifference = {
+  status: "changed" | "parent_only" | "result_only";
+  parent: DatasetIdentifier | null;
+  result: DatasetIdentifier | null;
+  changedFields: Array<"digest" | "sourceType" | "source">;
+};
+
+export type DatasetComparison = {
+  status: "changed" | "unchanged" | "unavailable";
+  unavailableReason: string | null;
+  differences: DatasetDifference[];
+};
+
+export type Comparison = {
+  status: "available" | "unavailable";
+  unavailableReason: string | null;
+  parameters: ParameterDifference[];
+  accuracy: AccuracyComparison;
+  datasets: DatasetComparison;
+};
+
 /**
  * Create an Evolution Step with the selected optional Run links.
  *
@@ -131,6 +167,16 @@ export async function createEvolutionStep(
  */
 export async function getEvolutionStep(evolutionStepId: number): Promise<EvolutionStepDetail> {
   return requestJson<EvolutionStepDetail>(`/evolution-steps/${evolutionStepId}`);
+}
+
+/**
+ * Load differences calculated from the Step's immutable captured Snapshots.
+ *
+ * @param evolutionStepId - Positive local Evolution Step identifier.
+ * @returns Parameter, accuracy, and Dataset Input comparison values.
+ */
+export async function getComparison(evolutionStepId: number): Promise<Comparison> {
+  return requestJson<Comparison>(`/evolution-steps/${evolutionStepId}/comparison`);
 }
 
 /**
