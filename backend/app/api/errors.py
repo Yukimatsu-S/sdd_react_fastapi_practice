@@ -1,7 +1,11 @@
-"""Error types and the unfinished response boundary for T016/T017."""
+"""Public error types and response conversion for the API boundary."""
+
+import logging
 
 from starlette.requests import Request
 from starlette.responses import JSONResponse
+
+logger = logging.getLogger(__name__)
 
 
 class ApiError(Exception):
@@ -22,13 +26,21 @@ class ApiError(Exception):
 
 
 def api_error_handler(request: Request, error: ApiError) -> JSONResponse:
-    """Provide an importable scaffold; response conversion belongs to T017.
+    """Convert an expected API error into the common public envelope.
 
     Args:
         request: Request holding the trace ID assigned by middleware.
         error: Expected failure to convert into the common error envelope.
 
     Returns:
-        JSONResponse: Empty placeholder, deliberately missing the contract.
+        JSONResponse: Error response containing code, message, and trace ID.
     """
-    return JSONResponse(content={})
+    trace_id = str(getattr(request.state, "trace_id", ""))
+    logger.info(
+        "Returning expected API error",
+        extra={"trace_id": trace_id, "status_code": error.status_code, "error_code": error.code},
+    )
+    return JSONResponse(
+        status_code=error.status_code,
+        content={"code": error.code, "message": error.message, "traceId": trace_id},
+    )

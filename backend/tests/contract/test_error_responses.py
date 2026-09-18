@@ -1,6 +1,7 @@
 """Verify the public API error contract through the actual application."""
 
 import json
+import logging
 from collections.abc import Iterator
 
 import pytest
@@ -34,6 +35,22 @@ def test_direct_handler_preserves_error_and_trace_id(status_code: int) -> None:
         "message": "Example public error message.",
         "traceId": "trace-test-001",
     }
+
+
+def test_direct_handler_logs_trace_id(caplog: pytest.LogCaptureFixture) -> None:
+    """Record the request trace ID with an expected API error.
+
+    Args:
+        caplog: Pytest fixture that captures emitted log records.
+    """
+    request = Request({"type": "http"})
+    request.state.trace_id = "trace-test-logging"
+    error = ApiError(409, "example_error", "Example public error message.")
+
+    with caplog.at_level(logging.INFO, logger="app.api.errors"):
+        api_error_handler(request, error)
+
+    assert caplog.records[-1].trace_id == "trace-test-logging"
 
 
 def test_unknown_api_route_returns_error_envelope(client: TestClient) -> None:
