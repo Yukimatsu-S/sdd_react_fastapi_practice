@@ -1,10 +1,9 @@
-function App() {
-  return (
-    <main>
-      <h1>Mondel</h1>
-      <p>ML Experiment Evolution Manager</p>
-    </main>
-  );
+import { BrowserRouter } from "react-router-dom";
+
+import { AppRoutes } from "./routes/AppRoutes";
+
+function App(): React.JSX.Element {
+  return <BrowserRouter><AppRoutes /></BrowserRouter>;
 }
 
 export default App;

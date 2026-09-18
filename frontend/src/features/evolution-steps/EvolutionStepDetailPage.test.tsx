@@ -17,9 +17,10 @@ describe("EvolutionStepDetail rendering", () => {
             reference: {
               runId: "run-12",
               runName: "training-v2",
-              status: "RUNNING",
+              currentStatus: "RUNNING",
               startedAt: "2026-09-18T10:00:00Z",
               endedAt: null,
+              lastSyncedAt: "2026-09-18T10:00:00Z",
               snapshotState: "pending",
               snapshotCapturedAt: null,
             },
