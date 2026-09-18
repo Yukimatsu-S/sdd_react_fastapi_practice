@@ -51,8 +51,12 @@ export function EvolutionStepForm({
         ...values,
         changeDescription: blankToNull(values.changeDescription),
       });
-    } catch {
-      setSubmitError("Evolution Step could not be saved. Please review the selected Runs.");
+    } catch (caught) {
+      setSubmitError(
+        caught instanceof Error
+          ? caught.message
+          : "Evolution Step could not be saved. Please review the selected Runs.",
+      );
     } finally {
       setIsSaving(false);
     }
