@@ -5,6 +5,7 @@ import { Navigate, Route, Routes, useParams } from "react-router-dom";
 import { EvolutionStepCreatePage } from "../pages/EvolutionStepCreatePage";
 import { EvolutionStepDetailPage } from "../pages/EvolutionStepDetailPage";
 import { EvolutionStepEditPage } from "../pages/EvolutionStepEditPage";
+import { EvolutionStepListPage } from "../pages/EvolutionStepListPage";
 
 /**
  * Resolve the documented create and saved-detail browser routes.
@@ -14,6 +15,7 @@ import { EvolutionStepEditPage } from "../pages/EvolutionStepEditPage";
 export function AppRoutes(): React.JSX.Element {
   return (
     <Routes>
+      <Route path="/evolution-steps" element={<EvolutionStepListPage />} />
       <Route path="/evolution-steps/new" element={<EvolutionStepCreatePage />} />
       <Route path="/evolution-steps/:evolutionStepId/edit" element={<EditRoute />} />
       <Route path="/evolution-steps/:evolutionStepId" element={<DetailRoute />} />

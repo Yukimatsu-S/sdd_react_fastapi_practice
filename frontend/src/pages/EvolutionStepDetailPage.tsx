@@ -9,6 +9,7 @@ import {
 import { getBestStepMetrics, syncRun, type BestStepMetricsResult } from "../api/runs";
 import { BestStepMetrics } from "../features/evolution-steps/BestStepMetrics";
 import { EvolutionStepDetail } from "../features/evolution-steps/EvolutionStepDetail";
+import { RunSyncStatus } from "../features/evolution-steps/RunSyncStatus";
 
 type EvolutionStepDetailPageProps = {
   evolutionStepId: number;
@@ -89,7 +90,7 @@ export function EvolutionStepDetailPage({
 
   return (
     <main>
-      {warning === null ? null : <p role="alert">{warning}</p>}
+      {warning === null ? null : <RunSyncStatus state="failed" />}
       <EvolutionStepDetail detail={detail} />
       {metrics.map((result) => (
         <BestStepMetrics key={result.runId} result={result} />
