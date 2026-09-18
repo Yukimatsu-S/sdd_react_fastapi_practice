@@ -1,5 +1,7 @@
 """Create Evolution Steps as one transaction-owned application use case."""
 
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import datetime
 
 from sqlalchemy.engine import Connection
@@ -65,7 +67,7 @@ class EvolutionStepService:
         validate_change_description(change_description)
         validate_distinct_run_links(parent_run_id, result_run_id)
 
-        with self._connection.begin():
+        with _transaction(self._connection):
             step_repository = EvolutionStepRepository(self._connection)
             run_repository = RunRepository(self._connection)
             step_repository.lock_lineage_mutation_guard()
@@ -109,7 +111,7 @@ class EvolutionStepService:
         Raises:
             ValueError: If supplied text or Run links violate a domain rule.
         """
-        with self._connection.begin():
+        with _transaction(self._connection):
             step_repository = EvolutionStepRepository(self._connection)
             run_repository = RunRepository(self._connection)
             step_repository.lock_lineage_mutation_guard()
@@ -198,3 +200,18 @@ def _validate_patch_text(changes: dict[str, str | None]) -> None:
         validate_required_text(value, "hypothesis")
     if "change_description" in changes:
         validate_change_description(changes["change_description"])
+
+
+@contextmanager
+def _transaction(connection: Connection) -> Iterator[None]:
+    """Use a root transaction alone or a savepoint inside an HTTP transaction.
+
+    Args:
+        connection: Database connection whose transaction scope is required.
+
+    Yields:
+        None: Control while the caller performs its atomic database operations.
+    """
+    transaction = connection.begin_nested() if connection.in_transaction() else connection.begin()
+    with transaction:
+        yield
