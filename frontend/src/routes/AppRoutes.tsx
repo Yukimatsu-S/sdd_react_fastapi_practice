@@ -4,6 +4,7 @@ import { Navigate, Route, Routes, useParams } from "react-router-dom";
 
 import { EvolutionStepCreatePage } from "../pages/EvolutionStepCreatePage";
 import { EvolutionStepDetailPage } from "../pages/EvolutionStepDetailPage";
+import { EvolutionStepEditPage } from "../pages/EvolutionStepEditPage";
 
 /**
  * Resolve the documented create and saved-detail browser routes.
@@ -14,10 +15,21 @@ export function AppRoutes(): React.JSX.Element {
   return (
     <Routes>
       <Route path="/evolution-steps/new" element={<EvolutionStepCreatePage />} />
+      <Route path="/evolution-steps/:evolutionStepId/edit" element={<EditRoute />} />
       <Route path="/evolution-steps/:evolutionStepId" element={<DetailRoute />} />
       <Route path="*" element={<Navigate to="/evolution-steps/new" replace />} />
     </Routes>
   );
+}
+
+/** Resolve an edit URL parameter into the page's positive local identifier. */
+function EditRoute(): React.JSX.Element {
+  const { evolutionStepId } = useParams();
+  const parsedId = Number(evolutionStepId);
+  if (!Number.isInteger(parsedId) || parsedId < 1) {
+    return <p role="alert">Evolution Step ID must be a positive integer.</p>;
+  }
+  return <EvolutionStepEditPage evolutionStepId={parsedId} />;
 }
 
 /**
