@@ -202,35 +202,40 @@ class EvolutionStepRepository:
         if guard is None:
             raise LookupError("lineage mutation guard is missing")
 
-    def current_edges(self) -> tuple[tuple[str, str], ...]:
+    def current_edges(
+        self,
+        excluding_step_id: int | None = None,
+    ) -> tuple[tuple[str, str], ...]:
         """Return complete current parent-to-result Run edges for cycle validation.
 
         Returns:
             tuple[tuple[str, str], ...]: Current non-null Run edges ordered by Step ID.
         """
-        rows = self._connection.execute(
+        statement = (
             select(evolution_step.c.parent_run_id, evolution_step.c.result_run_id)
             .where(
                 evolution_step.c.parent_run_id.is_not(None),
                 evolution_step.c.result_run_id.is_not(None),
             )
-            .order_by(evolution_step.c.id.asc()),
+            .order_by(evolution_step.c.id.asc())
         )
+        if excluding_step_id is not None:
+            statement = statement.where(evolution_step.c.id != excluding_step_id)
+        rows = self._connection.execute(statement)
         return tuple((str(parent), str(result)) for parent, result in rows)
 
-    def claimed_result_run_ids(self) -> set[str]:
+    def claimed_result_run_ids(self, excluding_step_id: int | None = None) -> set[str]:
         """Return every Run currently used as an Evolution Step result.
 
         Returns:
             set[str]: Result Run identifiers currently owned by any Step.
         """
-        return set(
-            self._connection.scalars(
-                select(evolution_step.c.result_run_id).where(
-                    evolution_step.c.result_run_id.is_not(None),
-                ),
-            ),
+        statement = select(evolution_step.c.result_run_id).where(
+            evolution_step.c.result_run_id.is_not(None),
         )
+        if excluding_step_id is not None:
+            statement = statement.where(evolution_step.c.id != excluding_step_id)
+        return set(self._connection.scalars(statement))
 
 
 def _to_step_record(row: Mapping[str, object]) -> EvolutionStepRecord:

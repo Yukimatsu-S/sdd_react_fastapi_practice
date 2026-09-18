@@ -152,3 +152,35 @@ def test_create_service_rejects_an_already_claimed_result_run(migrated_schema) -
             )
 
         assert EvolutionStepRepository(connection).get(existing.id) == existing
+
+
+def test_patch_service_updates_text_and_explicitly_unlinks_runs(migrated_schema) -> None:
+    """Apply only actual changes and retain each previous value in history."""
+    parent = LoadedRun("run-parent", "experiment-1", "parent", "FINISHED", NOW, NOW, None)
+    result = LoadedRun("run-result", "experiment-1", "result", "RUNNING", NOW, None, None)
+    with migrated_schema() as connection:
+        service = EvolutionStepService(connection, StaticRunLoader({
+            "run-parent": parent,
+            "run-result": result,
+        }))
+        created = service.create(
+            purpose="Improve baseline",
+            hypothesis="Augmentation improves accuracy.",
+            change_description="Use a crop.",
+            parent_run_id="run-parent",
+            result_run_id="run-result",
+            now=NOW,
+        )
+
+        updated = service.patch(
+            created.id,
+            {"purpose": "Improve baseline v2", "parent_run_id": None},
+            NOW,
+        )
+
+        assert updated.purpose == "Improve baseline v2"
+        assert updated.parent_run_id is None
+        assert [item.field for item in EvolutionStepRepository(connection).history(created.id)] == [
+            "purpose",
+            "parent_run_id",
+        ]

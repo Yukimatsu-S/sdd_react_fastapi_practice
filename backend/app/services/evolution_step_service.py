@@ -90,6 +90,53 @@ class EvolutionStepService:
                 now=now,
             )
 
+    def patch(
+        self,
+        evolution_step_id: int,
+        changes: dict[str, str | None],
+        now: datetime,
+    ) -> EvolutionStepRecord:
+        """Update editable fields and record actual changes in one transaction.
+
+        Args:
+            evolution_step_id: Identifier of the Step to edit.
+            changes: Submitted values; omitted editable fields remain unchanged.
+            now: UTC timestamp supplied by the request boundary.
+
+        Returns:
+            EvolutionStepRecord: Current Step state after the update or no-op.
+
+        Raises:
+            ValueError: If supplied text or Run links violate a domain rule.
+        """
+        with self._connection.begin():
+            step_repository = EvolutionStepRepository(self._connection)
+            run_repository = RunRepository(self._connection)
+            step_repository.lock_lineage_mutation_guard()
+            current = step_repository.get(evolution_step_id)
+            _validate_patch_text(changes)
+
+            parent_run_id = changes.get("parent_run_id", current.parent_run_id)
+            result_run_id = changes.get("result_run_id", current.result_run_id)
+            validate_distinct_run_links(parent_run_id, result_run_id)
+
+            selected_runs = self._load_selected_runs(
+                parent_run_id if parent_run_id != current.parent_run_id else None,
+                result_run_id if result_run_id != current.result_run_id else None,
+            )
+            for loaded_run in selected_runs:
+                run_repository.upsert_reference(_to_reference_record(loaded_run, now))
+
+            validate_result_run_is_available(
+                result_run_id,
+                step_repository.claimed_result_run_ids(excluding_step_id=evolution_step_id),
+            )
+            edges = list(step_repository.current_edges(excluding_step_id=evolution_step_id))
+            if parent_run_id is not None and result_run_id is not None:
+                edges.append((parent_run_id, result_run_id))
+            validate_lineage_is_acyclic(edges)
+            return step_repository.update(evolution_step_id, changes, now)
+
     def _load_selected_runs(
         self,
         parent_run_id: str | None,
@@ -128,3 +175,26 @@ def _to_reference_record(loaded_run: LoadedRun, synced_at: datetime) -> RunRefer
         last_synced_at=synced_at,
         created_at=synced_at,
     )
+
+
+def _validate_patch_text(changes: dict[str, str | None]) -> None:
+    """Validate only text fields explicitly supplied by a patch request.
+
+    Args:
+        changes: Partial editable values from the request body.
+
+    Raises:
+        ValueError: If a supplied text value violates its field rule.
+    """
+    if "purpose" in changes:
+        value = changes["purpose"]
+        if value is None:
+            raise ValueError("purpose is required")
+        validate_required_text(value, "purpose")
+    if "hypothesis" in changes:
+        value = changes["hypothesis"]
+        if value is None:
+            raise ValueError("hypothesis is required")
+        validate_required_text(value, "hypothesis")
+    if "change_description" in changes:
+        validate_change_description(changes["change_description"])
