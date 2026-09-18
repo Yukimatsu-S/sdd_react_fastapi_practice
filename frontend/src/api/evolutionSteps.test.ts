@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
 
-import { createEvolutionStep } from "./evolutionSteps";
+import { ApiClientError } from "./client";
+import {
+  createEvolutionStep,
+  getEvolutionStep,
+  patchEvolutionStep,
+} from "./evolutionSteps";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -31,6 +36,56 @@ describe("createEvolutionStep", () => {
       }),
       headers: { "content-type": "application/json" },
       method: "POST",
+    });
+  });
+
+  test("preserves a typed conflict response", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            code: "lineage_conflict",
+            message: "The selected Run would create a lineage cycle.",
+            traceId: "trace-001",
+          }),
+          { status: 409 },
+        ),
+      ),
+    );
+
+    await expect(
+      createEvolutionStep({ purpose: "p", hypothesis: "h" }),
+    ).rejects.toBeInstanceOf(ApiClientError);
+  });
+});
+
+describe("getEvolutionStep", () => {
+  test("requests the documented detail URL", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ id: 12 }), { status: 200 }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await getEvolutionStep(12);
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/v1/evolution-steps/12", {});
+  });
+});
+
+describe("patchEvolutionStep", () => {
+  test("sends only the supplied patch fields, including explicit null", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ id: 12 }), { status: 200 }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await patchEvolutionStep(12, { changeDescription: null, resultRunId: null });
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/v1/evolution-steps/12", {
+      body: JSON.stringify({ changeDescription: null, resultRunId: null }),
+      headers: { "content-type": "application/json" },
+      method: "PATCH",
     });
   });
 });

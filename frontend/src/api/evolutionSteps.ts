@@ -1,0 +1,119 @@
+/** Typed browser requests and response shapes for Evolution Step resources. */
+
+import { requestJson } from "./client";
+
+export type RunStatus = "RUNNING" | "SCHEDULED" | "FINISHED" | "FAILED" | "KILLED";
+export type SnapshotState = "pending" | "captured";
+
+export type RunSummary = {
+  runId: string;
+  runName: string | null;
+  currentStatus: RunStatus;
+  startedAt: string | null;
+  endedAt: string | null;
+  lastSyncedAt: string;
+  snapshotState: SnapshotState;
+  snapshotCapturedAt: string | null;
+};
+
+export type DatasetInputSnapshot = {
+  ordinal: number;
+  name: string | null;
+  digest: string | null;
+  sourceType: string | null;
+  source: string | null;
+  schema: string | null;
+  profile: Record<string, unknown> | null;
+  context: Record<string, unknown> | null;
+};
+
+export type RunSnapshot = {
+  runId: string;
+  statusAtCapture: "FINISHED" | "FAILED" | "KILLED";
+  startedAt: string | null;
+  endedAt: string | null;
+  bestAccuracy: number | null;
+  bestAccuracyStep: number | null;
+  bestAccuracyRecordedAt: string | null;
+  capturedAt: string;
+  parameters: Record<string, string>;
+  datasets: DatasetInputSnapshot[];
+};
+
+export type LinkedRun = {
+  reference: RunSummary;
+  snapshot: RunSnapshot | null;
+};
+
+export type EvolutionStepHistoryEntry = {
+  field: "purpose" | "hypothesis" | "changeDescription" | "parentRunId" | "resultRunId";
+  oldValue: string | null;
+  newValue: string | null;
+  changedAt: string;
+};
+
+export type EvolutionStepDetail = {
+  id: number;
+  purpose: string;
+  hypothesis: string;
+  changeDescription: string | null;
+  parentRun: LinkedRun | null;
+  resultRun: LinkedRun | null;
+  createdAt: string;
+  updatedAt: string;
+  history: EvolutionStepHistoryEntry[];
+};
+
+export type CreateEvolutionStepRequest = {
+  purpose: string;
+  hypothesis: string;
+  changeDescription?: string | null;
+  parentRunId?: string | null;
+  resultRunId?: string | null;
+};
+
+export type PatchEvolutionStepRequest = Partial<CreateEvolutionStepRequest>;
+
+/**
+ * Create an Evolution Step with the selected optional Run links.
+ *
+ * @param request - Text fields and optional parent/result Run IDs to save.
+ * @returns The newly created local Evolution Step detail.
+ */
+export async function createEvolutionStep(
+  request: CreateEvolutionStepRequest,
+): Promise<EvolutionStepDetail> {
+  return requestJson<EvolutionStepDetail>("/evolution-steps", {
+    body: JSON.stringify(request),
+    headers: { "content-type": "application/json" },
+    method: "POST",
+  });
+}
+
+/**
+ * Load one saved Evolution Step without synchronizing its linked Runs.
+ *
+ * @param evolutionStepId - Positive local Evolution Step identifier.
+ * @returns The saved detail and locally retained Run data.
+ */
+export async function getEvolutionStep(evolutionStepId: number): Promise<EvolutionStepDetail> {
+  return requestJson<EvolutionStepDetail>(`/evolution-steps/${evolutionStepId}`);
+}
+
+/**
+ * Update only supplied Evolution Step fields; explicit null clears nullable fields.
+ *
+ * @param evolutionStepId - Positive local Evolution Step identifier.
+ * @param request - Fields to replace, unlink, or clear.
+ * @returns The freshly saved Evolution Step detail.
+ */
+export async function patchEvolutionStep(
+  evolutionStepId: number,
+  request: PatchEvolutionStepRequest,
+): Promise<EvolutionStepDetail> {
+  return requestJson<EvolutionStepDetail>(`/evolution-steps/${evolutionStepId}`, {
+    body: JSON.stringify(request),
+    headers: { "content-type": "application/json" },
+    method: "PATCH",
+  });
+}
