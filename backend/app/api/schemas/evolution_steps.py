@@ -152,3 +152,44 @@ class EvolutionStepDetailResponse(ApiModel):
     history: list[HistoryEntryResponse]
     created_at: datetime
     updated_at: datetime
+
+
+class AccuracySummaryResponse(ApiModel):
+    """Compact best-accuracy comparison values for a list row."""
+
+    status: str
+    unavailable_reason: str | None
+    parent_best: float | None
+    result_best: float | None
+    delta: float | None
+
+
+class ComparisonSummaryResponse(ApiModel):
+    """Compact local Snapshot comparison summary for a list row."""
+
+    status: str
+    unavailable_reason: str | None
+    parameter_change_count: int | None
+    accuracy: AccuracySummaryResponse
+    dataset_status: str
+    dataset_unavailable_reason: str | None
+
+
+class EvolutionStepListItemResponse(ApiModel):
+    """Current Step fields displayed in a token-paginated list."""
+
+    id: int
+    purpose: str
+    hypothesis: str
+    parent_run: RunSummaryResponse | None
+    result_run: RunSummaryResponse | None
+    comparison_summary: ComparisonSummaryResponse
+    created_at: datetime
+    updated_at: datetime
+
+
+class EvolutionStepListResponse(ApiModel):
+    """One bounded Evolution Step list page and opaque continuation token."""
+
+    items: list[EvolutionStepListItemResponse]
+    next_page_token: str | None

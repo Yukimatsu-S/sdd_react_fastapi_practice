@@ -3,7 +3,7 @@
 from datetime import UTC, datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Path
+from fastapi import APIRouter, Depends, Path, Query
 from mlflow import MlflowClient
 from sqlalchemy.engine import Connection
 from sqlalchemy.orm import Session
@@ -11,9 +11,13 @@ from sqlalchemy.orm import Session
 from app.api.dependencies import get_request_session
 from app.api.errors import ApiError
 from app.api.schemas.evolution_steps import (
+    AccuracySummaryResponse,
+    ComparisonSummaryResponse,
     DatasetInputSnapshotResponse,
     EvolutionStepCreateRequest,
     EvolutionStepDetailResponse,
+    EvolutionStepListItemResponse,
+    EvolutionStepListResponse,
     EvolutionStepPatchRequest,
     HistoryEntryResponse,
     LinkedRunResponse,
@@ -22,6 +26,7 @@ from app.api.schemas.evolution_steps import (
 )
 from app.config import load_settings
 from app.domain.lineage import LineageCycleError, ResultRunConflictError
+from app.domain.pagination import decode_cursor
 from app.infrastructure.database import transaction_scope
 from app.infrastructure.evolution_step_repository import (
     EvolutionStepRecord,
@@ -29,6 +34,7 @@ from app.infrastructure.evolution_step_repository import (
 )
 from app.infrastructure.mlflow_run_loader import MlflowRunLoader
 from app.infrastructure.run_repository import RunRepository, RunSnapshotRecord
+from app.services.evolution_step_list_service import EvolutionStepListService
 from app.services.evolution_step_service import EvolutionStepService
 
 router = APIRouter(prefix="/evolution-steps", tags=["evolution-steps"])
@@ -46,6 +52,53 @@ def get_run_loader() -> MlflowRunLoader:
 
 
 RunLoaderDependency = Annotated[MlflowRunLoader, Depends(get_run_loader)]
+
+
+@router.get("", response_model=EvolutionStepListResponse)
+def list_evolution_steps(
+    page_token: Annotated[str | None, Query(alias="pageToken", min_length=1)] = None,
+    session: SessionDependency = None,
+) -> EvolutionStepListResponse:
+    """Return one locally stored, token-paginated Evolution Step list page.
+
+    Args:
+        page_token: Opaque continuation token from the prior list response.
+        session: Request-scoped database Session.
+
+    Returns:
+        EvolutionStepListResponse: Current Step summaries and optional continuation.
+    """
+    try:
+        if page_token is not None:
+            decode_cursor(page_token)
+        connection = session.connection()
+        result = EvolutionStepListService(connection).list(page_token)
+        runs = RunRepository(connection)
+        return EvolutionStepListResponse(
+            items=[
+                EvolutionStepListItemResponse(
+                    id=item.step.id,
+                    purpose=item.step.purpose,
+                    hypothesis=item.step.hypothesis,
+                    parent_run=_run_summary_response(runs, item.step.parent_run_id),
+                    result_run=_run_summary_response(runs, item.step.result_run_id),
+                    comparison_summary=ComparisonSummaryResponse(
+                        status=item.comparison_summary.status,
+                        unavailable_reason=item.comparison_summary.unavailable_reason,
+                        parameter_change_count=item.comparison_summary.parameter_change_count,
+                        accuracy=AccuracySummaryResponse(**item.comparison_summary.accuracy.__dict__),
+                        dataset_status=item.comparison_summary.dataset_status,
+                        dataset_unavailable_reason=item.comparison_summary.dataset_unavailable_reason,
+                    ),
+                    created_at=item.step.created_at,
+                    updated_at=item.step.updated_at,
+                )
+                for item in result.items
+            ],
+            next_page_token=result.next_page_token,
+        )
+    except ValueError as error:
+        raise ApiError(422, "validation_error", str(error)) from error
 
 
 @router.post("", response_model=EvolutionStepDetailResponse, status_code=201)
@@ -199,18 +252,37 @@ def _linked_run_response(
         return None
     snapshot = repository.get_snapshot(run_id)
     return LinkedRunResponse(
-        reference=RunSummaryResponse(
-            run_id=reference.run_id,
-            mlflow_experiment_id=reference.mlflow_experiment_id,
-            run_name=reference.run_name,
-            current_status=reference.current_status,
-            started_at=reference.started_at,
-            ended_at=reference.ended_at,
-            last_synced_at=reference.last_synced_at,
-            snapshot_state="captured" if snapshot is not None else "pending",
-            snapshot_captured_at=None if snapshot is None else snapshot.captured_at,
-        ),
+        reference=_run_summary_response(repository, run_id),
         snapshot=None if snapshot is None else _snapshot_response(snapshot),
+    )
+
+
+def _run_summary_response(repository: RunRepository, run_id: str | None) -> RunSummaryResponse | None:
+    """Map one optional locally saved Run Reference to its list-safe summary.
+
+    Args:
+        repository: Local Run data persistence boundary.
+        run_id: Optional linked Run identifier.
+
+    Returns:
+        RunSummaryResponse | None: Current local metadata, if the Run is linked and saved.
+    """
+    if run_id is None:
+        return None
+    reference = repository.get_reference(run_id)
+    if reference is None:
+        return None
+    snapshot = repository.get_snapshot(run_id)
+    return RunSummaryResponse(
+        run_id=reference.run_id,
+        mlflow_experiment_id=reference.mlflow_experiment_id,
+        run_name=reference.run_name,
+        current_status=reference.current_status,
+        started_at=reference.started_at,
+        ended_at=reference.ended_at,
+        last_synced_at=reference.last_synced_at,
+        snapshot_state="captured" if snapshot is not None else "pending",
+        snapshot_captured_at=None if snapshot is None else snapshot.captured_at,
     )
 
 
