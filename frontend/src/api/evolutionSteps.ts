@@ -74,6 +74,39 @@ export type CreateEvolutionStepRequest = {
 
 export type PatchEvolutionStepRequest = Partial<CreateEvolutionStepRequest>;
 
+export type AccuracyComparison = {
+  status: "available" | "unavailable";
+  unavailableReason: string | null;
+  parentBest: number | null;
+  resultBest: number | null;
+  delta: number | null;
+};
+
+export type ComparisonSummary = {
+  status: "available" | "unavailable";
+  unavailableReason: string | null;
+  parameterChangeCount: number | null;
+  accuracy: AccuracyComparison;
+  datasetStatus: "changed" | "unchanged" | "unavailable";
+  datasetUnavailableReason: string | null;
+};
+
+export type EvolutionStepListItem = {
+  id: number;
+  purpose: string;
+  hypothesis: string;
+  parentRun: RunSummary | null;
+  resultRun: RunSummary | null;
+  comparisonSummary: ComparisonSummary;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type EvolutionStepListPage = {
+  items: EvolutionStepListItem[];
+  nextPageToken: string | null;
+};
+
 /**
  * Create an Evolution Step with the selected optional Run links.
  *
@@ -116,4 +149,17 @@ export async function patchEvolutionStep(
     headers: { "content-type": "application/json" },
     method: "PATCH",
   });
+}
+
+/**
+ * Load one server-token-paginated page of saved Evolution Steps.
+ *
+ * @param pageToken - Opaque continuation token returned by a previous list page.
+ * @returns Current list items and an optional opaque next-page token.
+ */
+export async function listEvolutionSteps(pageToken?: string): Promise<EvolutionStepListPage> {
+  const path = pageToken === undefined
+    ? "/evolution-steps"
+    : `/evolution-steps?pageToken=${encodeURIComponent(pageToken)}`;
+  return requestJson<EvolutionStepListPage>(path);
 }

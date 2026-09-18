@@ -5,10 +5,20 @@ import {
   createEvolutionStep,
   getEvolutionStep,
   patchEvolutionStep,
+  listEvolutionSteps,
 } from "./evolutionSteps";
 
 afterEach(() => {
   vi.unstubAllGlobals();
+});
+
+describe("listEvolutionSteps", () => {
+  test("reuses the server-issued opaque token without exposing an input", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ items: [], nextPageToken: null }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    await listEvolutionSteps("opaque+/=");
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/v1/evolution-steps?pageToken=opaque%2B%2F%3D");
+  });
 });
 
 describe("createEvolutionStep", () => {
