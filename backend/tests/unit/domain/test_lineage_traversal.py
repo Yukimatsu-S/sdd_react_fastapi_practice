@@ -1,7 +1,10 @@
 """Specify deterministic traversal over current Evolution Step Run links."""
 
-from app.domain.lineage import LineageEdge, traverse_ancestors, traverse_descendants
-
+from app.domain.lineage import (
+    LineageEdge,
+    traverse_ancestors,
+    traverse_descendants,
+)
 
 EDGES = (
     LineageEdge(1, "external-root", "run-1"),
