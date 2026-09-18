@@ -1,15 +1,32 @@
 """Opt-in shared MySQL fixtures; unit tests do not request a DB connection."""
 
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
+from contextlib import AbstractContextManager, contextmanager
+from pathlib import Path
 from uuid import uuid4
 
 import pytest
+from alembic import command
+from alembic.config import Config
 from fastapi.testclient import TestClient
-from sqlalchemy import Column, Integer, MetaData, Table, create_engine, text
-from sqlalchemy.engine import make_url
+from sqlalchemy import Column, Integer, MetaData, Table, create_engine, inspect, text
+from sqlalchemy.engine import Connection, Engine, make_url
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.config import load_settings
+
+BACKEND_ROOT = Path(__file__).resolve().parents[1]
+SCHEMA_DROP_ORDER = (
+    "evolution_step_history",
+    "dataset_input",
+    "best_step_metric",
+    "run_parameter",
+    "run_snapshot",
+    "evolution_step",
+    "run_reference",
+    "lineage_mutation_guard",
+    "alembic_version",
+)
 
 
 @pytest.fixture
@@ -49,6 +66,53 @@ def database_engine(database_settings):
         yield engine
     finally:
         engine.dispose()
+
+
+@pytest.fixture
+def migrated_schema(
+    database_engine: Engine,
+) -> Callable[[], AbstractContextManager[Connection]]:
+    """Provide an empty migration-created schema for one integration test.
+
+    Args:
+        database_engine: Engine limited to the dedicated local test database.
+
+    Returns:
+        Callable[[], AbstractContextManager[Connection]]: Context factory that
+            applies the initial migration and removes only its own tables.
+    """
+    @contextmanager
+    def apply_initial_migration() -> Iterator[Connection]:
+        """Apply the initial revision and remove its tables after the test.
+
+        Yields:
+            Connection: Connection against the temporary migrated schema.
+
+        Raises:
+            AssertionError: Existing migration tables would be overwritten.
+        """
+        with database_engine.connect() as connection:
+            existing_tables = set(inspect(connection).get_table_names())
+            existing_views = set(inspect(connection).get_view_names())
+            conflicts = (existing_tables | existing_views).intersection(SCHEMA_DROP_ORDER)
+            assert not conflicts, f"Migration tables already exist: {sorted(conflicts)}"
+
+            config = Config(str(BACKEND_ROOT / "alembic.ini"))
+            config.set_main_option("script_location", str(BACKEND_ROOT / "migrations"))
+            config.attributes["connection"] = connection
+            try:
+                command.upgrade(config, "head")
+                connection.commit()
+                yield connection
+            finally:
+                connection.rollback()
+                remaining_tables = set(inspect(connection).get_table_names())
+                for table_name in SCHEMA_DROP_ORDER:
+                    if table_name in remaining_tables and table_name not in existing_tables:
+                        connection.execute(text(f"DROP TABLE `{table_name}`"))
+                connection.commit()
+
+    return apply_initial_migration
 
 
 @pytest.fixture

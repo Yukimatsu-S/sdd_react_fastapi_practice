@@ -284,18 +284,18 @@ def migrated_schema(database_engine: Engine) -> Callable[[], AbstractContextMana
         database_engine: Existing fixture restricted to the local test database.
 
     Returns:
-        A context factory applying the initial revision and cleaning owned tables.
+        Callable[[], AbstractContextManager[Connection]]: Factory applying the
+            initial revision and cleaning owned tables.
     """
     @contextmanager
     def apply_initial_migration() -> Iterator[Connection]:
         """Apply the revision to an unoccupied schema and yield its connection.
 
         Yields:
-            A connection for assertions and rollback-only test row operations.
+            Connection: Connection for assertions and rollback-only test rows.
 
         Raises:
             AssertionError: Pre-existing migration targets are found.
-            Exception: Migration or cleanup fails; errors are never suppressed.
         """
         with database_engine.connect() as connection:
             before = set(inspect(connection).get_table_names())

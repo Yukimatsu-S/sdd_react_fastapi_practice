@@ -1,34 +1,11 @@
 """Specify persisted Evolution Step links and append-only change history."""
 
-from collections.abc import Callable
-from contextlib import AbstractContextManager
 from datetime import UTC, datetime
-
-import pytest
-from sqlalchemy.engine import Connection, Engine
 
 from app.infrastructure.evolution_step_repository import EvolutionStepRepository
 from tests.integration.test_initial_schema import insert_reference
-from tests.integration.test_initial_schema import (
-    migrated_schema as _migrated_schema,
-)
 
 NOW = datetime(2026, 9, 18, 10, 0, tzinfo=UTC).replace(tzinfo=None)
-
-
-@pytest.fixture(name="migrated_schema")
-def migrated_schema_for_mutation_tests(
-    database_engine: Engine,
-) -> Callable[[], AbstractContextManager[Connection]]:
-    """Reuse the migration-only context without sharing product test behavior.
-
-    Args:
-        database_engine: Dedicated test database engine from the common fixture.
-
-    Returns:
-        Callable[[], AbstractContextManager[Connection]]: Isolated migrated-schema context.
-    """
-    return _migrated_schema.__wrapped__(database_engine)
 
 
 def test_repository_allows_shared_parent_and_records_only_actual_changes(migrated_schema) -> None:
