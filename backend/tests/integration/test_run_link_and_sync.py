@@ -4,6 +4,10 @@ from collections.abc import Callable
 from contextlib import AbstractContextManager
 from datetime import UTC, datetime
 
+from sqlalchemy.engine import Connection
+
+from app.domain.run_snapshot import MetricObservation
+from app.infrastructure.mlflow_gateway import LoadedRun, RunSnapshotPayload
 from app.infrastructure.run_repository import (
     BestStepMetricRecord,
     DatasetInputRecord,
@@ -11,10 +15,33 @@ from app.infrastructure.run_repository import (
     RunRepository,
     RunSnapshotRecord,
 )
-from sqlalchemy.engine import Connection
+from app.services.run_sync_service import RunSyncService
 
 TIME = datetime(2026, 9, 18, 11, 0, tzinfo=UTC).replace(tzinfo=None)
 LATER_TIME = datetime(2026, 9, 18, 12, 0, tzinfo=UTC).replace(tzinfo=None)
+
+
+class SequencedRunLoader:
+    """Return current Run data in the order configured by this integration test."""
+
+    def __init__(self, runs: list[LoadedRun]) -> None:
+        """Store the Run states returned by consecutive synchronization calls.
+
+        Args:
+            runs: MLflow-derived states from active through terminal.
+        """
+        self._runs = iter(runs)
+
+    def load(self, run_id: str) -> LoadedRun:
+        """Return the next state for the requested Run.
+
+        Args:
+            run_id: Identifier requested by the synchronization service.
+
+        Returns:
+            LoadedRun: Next configured current state.
+        """
+        return next(self._runs)
 
 
 def test_repository_updates_current_reference_without_creating_active_snapshot(
@@ -105,3 +132,32 @@ def test_repository_captures_terminal_snapshot_once_and_keeps_first_data(
         assert captured == first_snapshot
         assert reused == first_snapshot
         assert repository.get_snapshot("run-terminal") == first_snapshot
+
+
+def test_sync_service_keeps_active_run_pending_then_captures_terminal_data(
+    migrated_schema: Callable[[], AbstractContextManager[Connection]],
+) -> None:
+    """Synchronize metadata before capturing the first terminal Snapshot."""
+    active = LoadedRun("run-sync", "experiment-1", "training", "RUNNING", TIME, None, None)
+    terminal = LoadedRun(
+        "run-sync",
+        "experiment-1",
+        "training",
+        "FINISHED",
+        TIME,
+        LATER_TIME,
+        RunSnapshotPayload(
+            parameters={"epochs": "10"},
+            metrics=(MetricObservation("accuracy", 0.91, 5, LATER_TIME),),
+            datasets=(),
+        ),
+    )
+    with migrated_schema() as connection:
+        service = RunSyncService(connection, SequencedRunLoader([active, terminal]))
+
+        pending = service.sync("run-sync", TIME)
+        captured = service.sync("run-sync", LATER_TIME)
+
+        assert pending.snapshot is None
+        assert captured.snapshot is not None
+        assert captured.snapshot.best_accuracy == 0.91

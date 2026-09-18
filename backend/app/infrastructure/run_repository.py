@@ -193,43 +193,42 @@ class RunRepository:
                 captured_at=record.captured_at,
             ),
         )
-        self._connection.execute(
-            run_parameter.insert(),
-            [
-                {"run_id": record.run_id, "name": name, "value": value}
-                for name, value in record.parameters.items()
-            ],
-        )
-        self._connection.execute(
-            best_step_metric.insert(),
-            [
-                {
-                    "run_id": record.run_id,
-                    "name": metric.name,
-                    "value": metric.value,
-                    "step": metric.step,
-                    "recorded_at": metric.recorded_at,
-                }
-                for metric in record.metrics
-            ],
-        )
-        self._connection.execute(
-            dataset_input.insert(),
-            [
-                {
-                    "run_id": record.run_id,
-                    "ordinal": dataset.ordinal,
-                    "name": dataset.name,
-                    "digest": dataset.digest,
-                    "source_type": dataset.source_type,
-                    "source": dataset.source,
-                    "schema": dataset.schema,
-                    "profile": dataset.profile,
-                    "context": dataset.context,
-                }
-                for dataset in record.datasets
-            ],
-        )
+        parameter_rows = [
+            {"run_id": record.run_id, "name": name, "value": value}
+            for name, value in record.parameters.items()
+        ]
+        if parameter_rows:
+            self._connection.execute(run_parameter.insert(), parameter_rows)
+
+        metric_rows = [
+            {
+                "run_id": record.run_id,
+                "name": metric.name,
+                "value": metric.value,
+                "step": metric.step,
+                "recorded_at": metric.recorded_at,
+            }
+            for metric in record.metrics
+        ]
+        if metric_rows:
+            self._connection.execute(best_step_metric.insert(), metric_rows)
+
+        dataset_rows = [
+            {
+                "run_id": record.run_id,
+                "ordinal": dataset.ordinal,
+                "name": dataset.name,
+                "digest": dataset.digest,
+                "source_type": dataset.source_type,
+                "source": dataset.source,
+                "schema": dataset.schema,
+                "profile": dataset.profile,
+                "context": dataset.context,
+            }
+            for dataset in record.datasets
+        ]
+        if dataset_rows:
+            self._connection.execute(dataset_input.insert(), dataset_rows)
         return record
 
     def _get_reference(self, run_id: str) -> RunReferenceRecord:
