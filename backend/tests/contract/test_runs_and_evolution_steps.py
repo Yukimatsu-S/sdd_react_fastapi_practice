@@ -2,8 +2,9 @@
 
 import inspect
 
-from app.api.routes import evolution_steps, runs
 from fastapi.testclient import TestClient
+
+from app.api.routes import evolution_steps, runs
 
 
 def test_us1_routes_are_synchronous_path_operations() -> None:
@@ -17,10 +18,13 @@ def test_us1_routes_are_synchronous_path_operations() -> None:
 
 def test_application_registers_us1_paths(client: TestClient) -> None:
     """Expose the documented US1 paths below the versioned API prefix."""
+    # FastAPI 0.115+ retains included routers as internal route objects.  The
+    # generated OpenAPI document is the public, version-independent source of
+    # truth for the paths and methods the application exposes.
     operations = {
-        (route.path, method)
-        for route in client.app.routes
-        for method in getattr(route, "methods", set())
+        (path, method.upper())
+        for path, path_item in client.app.openapi()["paths"].items()
+        for method in path_item
     }
 
     assert ("/api/v1/evolution-steps", "POST") in operations

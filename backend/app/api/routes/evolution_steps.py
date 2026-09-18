@@ -8,8 +8,8 @@ from mlflow import MlflowClient
 from sqlalchemy.engine import Connection
 from sqlalchemy.orm import Session
 
+from app.api.dependencies import get_request_session
 from app.api.errors import ApiError
-from app.api.router import get_request_session
 from app.api.schemas.evolution_steps import (
     DatasetInputSnapshotResponse,
     EvolutionStepCreateRequest,
