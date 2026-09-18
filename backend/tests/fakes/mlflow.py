@@ -22,6 +22,8 @@ class FakeDataset:
     digest: str
     source_type: str
     source: str
+    schema: str | None = None
+    profile: str | None = None
     context: str | None = None
 
 
@@ -42,6 +44,14 @@ class FakeRun:
     datasets: tuple[FakeDataset, ...] = ()
 
 
+@dataclass(frozen=True)
+class FakeExperiment:
+    """One active MLflow Experiment exposed by the fake client."""
+
+    experiment_id: str
+    name: str
+
+
 class FakeMlflowClient:
     """Offer a small deterministic source for search and Run-loader adapters."""
 
@@ -54,7 +64,19 @@ class FakeMlflowClient:
         self.runs = runs
         self.last_search_experiment_ids: tuple[str, ...] = ()
 
-    def search_runs(self, experiment_ids: tuple[str, ...]) -> tuple[FakeRun, ...]:
+    def search_experiments(self, **_: object) -> tuple[FakeExperiment, ...]:
+        """Return active Experiment identities derived from the fake Runs.
+
+        Returns:
+            tuple[FakeExperiment, ...]: Distinct Experiment IDs and names.
+        """
+        experiments = {
+            (run.experiment_id, run.experiment_name)
+            for run in self.runs
+        }
+        return tuple(FakeExperiment(experiment_id, name) for experiment_id, name in sorted(experiments))
+
+    def search_runs(self, experiment_ids: list[str], **_: object) -> tuple[FakeRun, ...]:
         """Return Runs in the requested Experiments and record the request.
 
         Args:
@@ -63,7 +85,7 @@ class FakeMlflowClient:
         Returns:
             tuple[FakeRun, ...]: Matching fake Runs in fixture order.
         """
-        self.last_search_experiment_ids = experiment_ids
+        self.last_search_experiment_ids = tuple(experiment_ids)
         return tuple(run for run in self.runs if run.experiment_id in experiment_ids)
 
     def get_run(self, run_id: str) -> FakeRun:
@@ -82,3 +104,15 @@ class FakeMlflowClient:
             if run.run_id == run_id:
                 return run
         raise KeyError(run_id)
+
+    def get_metric_history(self, run_id: str, key: str) -> tuple[FakeMetric, ...]:
+        """Return all matching fake Metric observations for one Run and name.
+
+        Args:
+            run_id: Run identifier whose Metric history is requested.
+            key: Metric name to filter from the fake Run's history.
+
+        Returns:
+            tuple[FakeMetric, ...]: Matching observations in fixture order.
+        """
+        return tuple(metric for metric in self.get_run(run_id).metrics if metric.key == key)
