@@ -72,21 +72,15 @@ def test_unknown_api_route_returns_error_envelope(client: TestClient) -> None:
 
 
 @pytest.fixture
-def error_client(
-    client: TestClient, monkeypatch: pytest.MonkeyPatch,
-) -> Iterator[TestClient]:
-    """Temporarily add error probes without registering product handlers.
-
-    Args:
-        client: Client for the real application and its actual middleware.
-        monkeypatch: Restore the original route list after the test.
+def error_client() -> Iterator[TestClient]:
+    """Provide an isolated application with controlled error routes.
 
     Yields:
-        TestClient: Client with test-only routes, requiring no DB or MLflow.
+        TestClient: Client with test-only routes that needs no DB or MLflow.
     """
-    from main import app
+    from main import create_app
 
-    monkeypatch.setattr(app.router, "routes", list(app.router.routes))
+    application = create_app()
     router = APIRouter(prefix="/api/v1/_test")
 
     @router.get("/expected/{status_code}")
@@ -110,8 +104,9 @@ def error_client(
         """
         raise RuntimeError("private-test-diagnostic")
 
-    app.include_router(router)
-    yield client
+    application.include_router(router)
+    with TestClient(application, raise_server_exceptions=False) as test_client:
+        yield test_client
 
 
 @pytest.mark.parametrize("status_code", [409, 502])

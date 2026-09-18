@@ -14,14 +14,14 @@ from app.config import load_settings
 
 @pytest.fixture
 def client() -> Iterator[TestClient]:
-    """Provide an HTTP client for the actual application without a live server.
+    """Provide an HTTP client for one newly created application.
 
     Yields:
-        TestClient: Client that returns server errors as HTTP responses.
+        TestClient: Isolated client that returns server errors as HTTP responses.
     """
-    from main import app
+    from main import create_app
 
-    with TestClient(app, raise_server_exceptions=False) as test_client:
+    with TestClient(create_app(), raise_server_exceptions=False) as test_client:
         yield test_client
 
 
