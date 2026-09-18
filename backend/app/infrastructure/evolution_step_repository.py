@@ -218,6 +218,20 @@ class EvolutionStepRepository:
         )
         return tuple((str(parent), str(result)) for parent, result in rows)
 
+    def claimed_result_run_ids(self) -> set[str]:
+        """Return every Run currently used as an Evolution Step result.
+
+        Returns:
+            set[str]: Result Run identifiers currently owned by any Step.
+        """
+        return set(
+            self._connection.scalars(
+                select(evolution_step.c.result_run_id).where(
+                    evolution_step.c.result_run_id.is_not(None),
+                ),
+            ),
+        )
+
 
 def _to_step_record(row: Mapping[str, object]) -> EvolutionStepRecord:
     """Convert one SQLAlchemy mapping row into the repository's typed record.
