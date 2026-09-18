@@ -27,6 +27,23 @@ export type RunSyncResult = {
   run: LinkedRun;
 };
 
+export type BestStepMetric = {
+  name: string;
+  value: number;
+  step: number;
+  recordedAt: string;
+};
+
+export type BestStepMetricsResult = {
+  runId: string;
+  status: "available" | "unavailable";
+  unavailableReason: "snapshot_pending" | "accuracy_missing" | null;
+  bestAccuracy: number | null;
+  bestAccuracyStep: number | null;
+  bestAccuracyRecordedAt: string | null;
+  items: BestStepMetric[];
+};
+
 /**
  * Search the current MLflow Runs available for an Evolution Step link.
  *
@@ -55,6 +72,16 @@ export async function searchRuns(request: RunSearchRequest = {}): Promise<RunCan
  */
 export async function syncRun(runId: string): Promise<RunSyncResult> {
   return requestJson<RunSyncResult>(`/runs/${runId}/sync`, { method: "POST" });
+}
+
+/**
+ * Load locally captured Metrics at the Run's canonical best-accuracy step.
+ *
+ * @param runId - Locally saved MLflow Run identifier.
+ * @returns Available Metric items or the explicit local unavailability reason.
+ */
+export async function getBestStepMetrics(runId: string): Promise<BestStepMetricsResult> {
+  return requestJson<BestStepMetricsResult>(`/runs/${runId}/best-step-metrics`);
 }
 
 /**

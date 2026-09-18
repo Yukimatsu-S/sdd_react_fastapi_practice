@@ -1,7 +1,12 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
 
 import { ApiClientError } from "./client";
-import { isMlflowUnavailableError, searchRuns, syncRun } from "./runs";
+import {
+  getBestStepMetrics,
+  isMlflowUnavailableError,
+  searchRuns,
+  syncRun,
+} from "./runs";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -58,5 +63,33 @@ describe("sync", () => {
       expect(error).toBeInstanceOf(ApiClientError);
       expect(isMlflowUnavailableError(error)).toBe(true);
     }
+  });
+});
+
+describe("best-step metrics", () => {
+  test("gets signed best-step Metrics and preserves unavailable fields", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          runId: "run-001",
+          status: "unavailable",
+          unavailableReason: "accuracy_missing",
+          bestAccuracy: null,
+          bestAccuracyStep: null,
+          bestAccuracyRecordedAt: null,
+          items: [],
+        }),
+        { status: 200 },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await getBestStepMetrics("run-001");
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/v1/runs/run-001/best-step-metrics",
+      {},
+    );
+    expect(result).toMatchObject({ bestAccuracyStep: null, items: [] });
   });
 });
