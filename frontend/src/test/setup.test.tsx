@@ -3,13 +3,10 @@ import { expect, test } from "vitest";
 
 import App from "../App";
 
-test("renders a React component in the browser-like test environment", () => {
+test("redirects an unspecified path to the Evolution Step creation page", () => {
   render(<App />);
 
   expect(
-    screen.getByRole("heading", { level: 1, name: "Mondel" }),
-  ).toBeInTheDocument();
-  expect(
-    screen.getByText("ML Experiment Evolution Manager"),
+    screen.getByRole("heading", { level: 1, name: "Create Evolution Step" }),
   ).toBeInTheDocument();
 });
