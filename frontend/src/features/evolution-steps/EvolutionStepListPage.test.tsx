@@ -4,9 +4,9 @@ import { describe, expect, test } from "vitest";
 import { EvolutionStepListPage } from "./EvolutionStepListPage";
 
 describe("EvolutionStepListPage", () => {
-  test("shows an explicit empty state before stored Evolution Steps exist", () => {
+  test("shows an explicit empty state before stored Evolution Steps exist", async () => {
     render(<EvolutionStepListPage />);
 
-    expect(screen.getByText("No Evolution Steps found.")).toBeInTheDocument();
+    expect(await screen.findByText("No Evolution Steps found.")).toBeInTheDocument();
   });
 });
