@@ -57,6 +57,8 @@ class EvolutionStepListService:
                     comparison_summary=build_comparison_summary(
                         _snapshot_values(self._runs.get_snapshot(step.parent_run_id)),
                         _snapshot_values(self._runs.get_snapshot(step.result_run_id)),
+                        step.parent_run_id,
+                        step.result_run_id,
                     ),
                 )
                 for step in page.items

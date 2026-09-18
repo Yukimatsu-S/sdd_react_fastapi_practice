@@ -14,8 +14,8 @@ def test_available_summary_has_null_reasons_and_counts_changes() -> None:
     assert summary.unavailable_reason is None
     assert summary.parameter_change_count == 1
     assert summary.accuracy.delta == 0.02
-    assert summary.dataset_status == "unchanged"
-    assert summary.dataset_unavailable_reason is None
+    assert summary.dataset_status == "unavailable"
+    assert summary.dataset_unavailable_reason == "both_dataset_inputs_missing"
 
 
 def test_missing_snapshot_has_explicit_unavailable_reasons() -> None:
@@ -23,7 +23,7 @@ def test_missing_snapshot_has_explicit_unavailable_reasons() -> None:
     summary = build_comparison_summary(parent_snapshot=None, result_snapshot=None)
 
     assert summary.status == "unavailable"
-    assert summary.unavailable_reason == "snapshot_pending"
+    assert summary.unavailable_reason == "parent_snapshot_pending"
     assert summary.parameter_change_count is None
     assert summary.accuracy.status == "unavailable"
     assert summary.dataset_status == "unavailable"
