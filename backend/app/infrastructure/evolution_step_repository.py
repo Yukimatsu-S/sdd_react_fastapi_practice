@@ -2,11 +2,12 @@
 
 from collections.abc import Mapping
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 
-from sqlalchemy import select, update
+from sqlalchemy import and_, or_, select, update
 from sqlalchemy.engine import Connection
 
+from app.domain.pagination import decode_cursor, encode_cursor
 from app.infrastructure.models import (
     evolution_step,
     evolution_step_history,
@@ -44,6 +45,14 @@ class EvolutionStepHistoryRecord:
     old_value: str | None
     new_value: str | None
     changed_at: datetime
+
+
+@dataclass(frozen=True)
+class EvolutionStepPage:
+    """One bounded page of current Evolution Steps and an opaque continuation."""
+
+    items: tuple[EvolutionStepRecord, ...]
+    next_page_token: str | None
 
 
 class EvolutionStepRepository:
@@ -236,6 +245,43 @@ class EvolutionStepRepository:
         if excluding_step_id is not None:
             statement = statement.where(evolution_step.c.id != excluding_step_id)
         return set(self._connection.scalars(statement))
+
+    def list_page(self, page_token: str | None) -> EvolutionStepPage:
+        """Read at most twenty Steps in stable creation-time and ID descending order.
+
+        Args:
+            page_token: Opaque boundary from the preceding response, if any.
+
+        Returns:
+            Twenty current Steps at most and a token only when another row exists.
+
+        Raises:
+            ValueError: If the supplied token cannot be decoded.
+        """
+        statement = select(evolution_step).order_by(
+            evolution_step.c.created_at.desc(),
+            evolution_step.c.id.desc(),
+        )
+        if page_token is not None:
+            cursor_created_at, cursor_id = decode_cursor(page_token)
+            naive_cursor_time = cursor_created_at.astimezone(UTC).replace(tzinfo=None)
+            statement = statement.where(
+                or_(
+                    evolution_step.c.created_at < naive_cursor_time,
+                    and_(
+                        evolution_step.c.created_at == naive_cursor_time,
+                        evolution_step.c.id < cursor_id,
+                    ),
+                ),
+            )
+
+        rows = self._connection.execute(statement.limit(21)).mappings().all()
+        records = tuple(_to_step_record(row) for row in rows[:20])
+        next_page_token = None
+        if len(rows) == 21:
+            boundary = records[-1]
+            next_page_token = encode_cursor(boundary.created_at.replace(tzinfo=UTC), boundary.id)
+        return EvolutionStepPage(items=records, next_page_token=next_page_token)
 
 
 def _to_step_record(row: Mapping[str, object]) -> EvolutionStepRecord:
