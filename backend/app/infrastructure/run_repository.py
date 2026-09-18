@@ -109,7 +109,23 @@ class RunRepository:
                     last_synced_at=record.last_synced_at,
                 ),
             )
-        return self._get_reference(record.run_id)
+        return self.get_reference(record.run_id)
+
+    def get_reference(self, run_id: str) -> RunReferenceRecord | None:
+        """Read one saved Run Reference without contacting MLflow.
+
+        Args:
+            run_id: Identifier of the locally stored Run Reference.
+
+        Returns:
+            RunReferenceRecord | None: Saved mutable metadata, if present.
+        """
+        row = self._connection.execute(
+            select(run_reference).where(run_reference.c.run_id == run_id),
+        ).mappings().one_or_none()
+        if row is None:
+            return None
+        return _to_reference_record(row)
 
     def get_snapshot(self, run_id: str) -> RunSnapshotRecord | None:
         """Read a captured Snapshot or return ``None`` while it is pending.
@@ -231,28 +247,26 @@ class RunRepository:
             self._connection.execute(dataset_input.insert(), dataset_rows)
         return record
 
-    def _get_reference(self, run_id: str) -> RunReferenceRecord:
-        """Read one stored Run Reference after a successful mutation.
 
-        Args:
-            run_id: Identifier of the reference just inserted or refreshed.
+def _to_reference_record(row: Mapping[str, object]) -> RunReferenceRecord:
+    """Convert a saved Run Reference database row to its typed record.
 
-        Returns:
-            RunReferenceRecord: Stored mutable reference data.
-        """
-        row = self._connection.execute(
-            select(run_reference).where(run_reference.c.run_id == run_id),
-        ).mappings().one()
-        return RunReferenceRecord(
-            run_id=str(row["run_id"]),
-            mlflow_experiment_id=row["mlflow_experiment_id"],
-            run_name=row["run_name"],
-            current_status=str(row["current_status"]),
-            started_at=row["started_at"],
-            ended_at=row["ended_at"],
-            last_synced_at=row["last_synced_at"],
-            created_at=row["created_at"],
-        )
+    Args:
+        row: Selected ``run_reference`` row.
+
+    Returns:
+        RunReferenceRecord: Current mutable Run metadata.
+    """
+    return RunReferenceRecord(
+        run_id=str(row["run_id"]),
+        mlflow_experiment_id=row["mlflow_experiment_id"],
+        run_name=row["run_name"],
+        current_status=str(row["current_status"]),
+        started_at=row["started_at"],
+        ended_at=row["ended_at"],
+        last_synced_at=row["last_synced_at"],
+        created_at=row["created_at"],
+    )
 
 
 def _to_snapshot_record(
