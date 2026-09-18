@@ -4,7 +4,10 @@ from datetime import UTC, datetime
 
 import pytest
 
-from app.domain.evolution_step import validate_change_description, validate_required_text
+from app.domain.evolution_step import (
+    validate_change_description,
+    validate_required_text,
+)
 from app.domain.run_snapshot import (
     MetricObservation,
     canonicalize_metric_observations,
