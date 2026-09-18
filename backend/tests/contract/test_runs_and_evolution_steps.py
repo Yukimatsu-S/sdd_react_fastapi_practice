@@ -34,6 +34,14 @@ def test_application_registers_us1_paths(client: TestClient) -> None:
     assert ("/api/v1/runs/{runId}/sync", "POST") in operations
 
 
+def test_linked_run_summary_uses_current_status_contract(client: TestClient) -> None:
+    """Expose the current Run state with its unambiguous public JSON name."""
+    schemas = client.app.openapi()["components"]["schemas"]
+
+    assert "currentStatus" in schemas["RunSummaryResponse"]["properties"]
+    assert "status" not in schemas["RunSummaryResponse"]["properties"]
+
+
 def test_invalid_us1_path_values_return_the_public_validation_envelope(
     client: TestClient,
 ) -> None:

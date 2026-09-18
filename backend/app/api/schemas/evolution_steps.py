@@ -94,7 +94,7 @@ class RunSummaryResponse(ApiModel):
     run_id: str
     mlflow_experiment_id: str | None
     run_name: str | None
-    status: str
+    current_status: str
     started_at: datetime | None
     ended_at: datetime | None
     last_synced_at: datetime

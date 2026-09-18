@@ -203,7 +203,7 @@ def _linked_run_response(
             run_id=reference.run_id,
             mlflow_experiment_id=reference.mlflow_experiment_id,
             run_name=reference.run_name,
-            status=reference.current_status,
+            current_status=reference.current_status,
             started_at=reference.started_at,
             ended_at=reference.ended_at,
             last_synced_at=reference.last_synced_at,
