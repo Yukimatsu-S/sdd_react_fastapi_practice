@@ -1,5 +1,7 @@
 """Synchronize mutable Run metadata and capture terminal Snapshots once."""
 
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -48,7 +50,7 @@ class RunSyncService:
             RunSyncResult: Updated mutable Reference and optional immutable Snapshot.
         """
         loaded_run = self._run_loader.load(run_id)
-        with self._connection.begin():
+        with _transaction(self._connection):
             repository = RunRepository(self._connection)
             reference = repository.upsert_reference(_to_reference_record(loaded_run, now))
             snapshot = repository.get_snapshot(run_id)
@@ -132,3 +134,18 @@ def _to_snapshot_record(loaded_run: LoadedRun, captured_at: datetime) -> RunSnap
             for ordinal, dataset in enumerate(payload.datasets)
         ),
     )
+
+
+@contextmanager
+def _transaction(connection: Connection) -> Iterator[None]:
+    """Use a root transaction alone or a savepoint inside an HTTP transaction.
+
+    Args:
+        connection: Database connection whose transaction scope is required.
+
+    Yields:
+        None: Control while the synchronization mutates local data.
+    """
+    transaction = connection.begin_nested() if connection.in_transaction() else connection.begin()
+    with transaction:
+        yield
