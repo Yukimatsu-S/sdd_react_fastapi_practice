@@ -16,6 +16,8 @@ from app.api.schemas.evolution_steps import (
     RunSummaryResponse,
 )
 from app.api.schemas.runs import (
+    BestStepMetricItemResponse,
+    BestStepMetricsResponse,
     RunCandidatePageResponse,
     RunCandidateResponse,
     RunSyncResponse,
@@ -25,6 +27,7 @@ from app.infrastructure.database import transaction_scope
 from app.infrastructure.mlflow_run_loader import MlflowRunLoader
 from app.infrastructure.mlflow_run_search import MlflowRunSearch
 from app.infrastructure.run_repository import RunRepository, RunSnapshotRecord
+from app.services.best_step_metrics_service import BestStepMetricsService
 from app.services.run_sync_service import RunSyncService
 
 router = APIRouter(prefix="/runs", tags=["runs"])
@@ -108,6 +111,43 @@ def sync_run(
             )
     except (KeyError, OSError) as error:
         raise ApiError(502, "mlflow_unavailable", "MLflow Run could not be loaded.") from error
+
+
+@router.get("/{runId}/best-step-metrics", response_model=BestStepMetricsResponse)
+def get_best_step_metrics(
+    run_id: Annotated[str, Path(alias="runId", max_length=64, pattern=r"^\S+$")],
+    session: SessionDependency,
+) -> BestStepMetricsResponse:
+    """Return canonical Metrics stored at one Run's best-accuracy step.
+
+    Args:
+        run_id: Locally linked Run identifier from the URL path.
+        session: Request-scoped local database Session.
+
+    Returns:
+        BestStepMetricsResponse: Available local Metric items or reason state.
+    """
+    try:
+        result = BestStepMetricsService(RunRepository(session.connection())).get(run_id)
+    except LookupError as error:
+        raise ApiError(404, "not_found", str(error)) from error
+    return BestStepMetricsResponse(
+        run_id=result.run_id,
+        status=result.status,
+        unavailable_reason=result.unavailable_reason,
+        best_accuracy=result.best_accuracy,
+        best_accuracy_step=result.best_accuracy_step,
+        best_accuracy_recorded_at=result.best_accuracy_recorded_at,
+        items=[
+            BestStepMetricItemResponse(
+                name=item.name,
+                value=item.value,
+                step=item.step,
+                recorded_at=item.recorded_at,
+            )
+            for item in result.items
+        ],
+    )
 
 
 def _linked_run_response(
