@@ -3,6 +3,7 @@
 from collections.abc import Callable
 from contextlib import AbstractContextManager
 from datetime import UTC, datetime
+from math import ceil
 from time import perf_counter
 
 from sqlalchemy.engine import Connection
@@ -107,5 +108,5 @@ def _p95_seconds(read: Callable[[], object]) -> float:
         durations.append(perf_counter() - started_at)
 
     ordered = sorted(durations)
-    rank = max(1, round(MEASURED_RUNS * 0.95))
+    rank = max(1, ceil(MEASURED_RUNS * 0.95))
     return ordered[rank - 1]
