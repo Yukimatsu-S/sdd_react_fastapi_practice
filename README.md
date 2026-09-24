@@ -4,7 +4,7 @@ MLflowに記録されたRunを改善工程（Evolution Step）へ紐付け、実
 
 ## 最初に：何を作り、どこまで動かすのか
 
-この手順のゴールは、Macで画面・APIの起動とテスト用DBへの接続を確認し、翌日も同じ手順で再開できる状態にすることです。製品全体は開発中です。
+この手順のゴールは、Macで画面・API・MySQLを起動し、テストとブラウザ検証を同じ手順で再現できる状態にすることです。
 
 > 用語：フロントエンドは利用者に見える画面、バックエンドは画面からの依頼を処理する側、APIはプログラム同士が依頼・応答をやり取りする窓口です。
 
@@ -23,14 +23,14 @@ flowchart TB
             Mysql --> DB
         end
         Browser --> Node
-        Browser -->|今は別途ブラウザでGET /を確認| Python
+        Browser -->|/api リクエスト| Node
         Check -->|Mac側ポート3307経由| Mysql
-        Node -. 製品API実装後に転送 .-> Python
-        Python -. DB連携実装後に接続 .-> Mysql
+        Node -->|/api を中継| Python
+        Python -->|SQL| Mysql
     end
 ```
 
-実線はこの手順で確認する経路、点線は後続の開発でつなぐ経路です。現在の画面表示だけではFastAPIやMySQLとの連携まで成功したことにはなりません。
+実線は現在のローカルMVPで使う経路です。ブラウザはViteへ相対`/api/v1/...`を送り、ViteがFastAPIへ中継し、FastAPIがMySQLへ読み書きします。
 
 > 用語：MySQLはDBを管理するソフトウェア（DBMS）、DBは保存データの集まりです。今回のMySQLの中に`mondel_test`というDBを作ります。DockerはMySQLを隔離された実行場所「コンテナ」で動かします。
 
@@ -52,9 +52,9 @@ flowchart TB
 
 ### 現在の実装範囲
 
-Setup段階ではReactの見出し表示、FastAPIの`GET /`、テスト専用MySQL、バックエンド・フロントエンドのsmoke testを用意しています。製品API（`/api/v1`）、DBテーブル・マイグレーション、MLflow連携は後続タスクで実装します。
+ローカルMVPには、Evolution Stepの作成・編集・一覧・詳細、Run候補の取得と同期、保存済みSnapshotの表示、比較、Lineage、MySQLマイグレーション、MLflow gateway、およびバックエンド・フロントエンド・Chromium E2Eテストが含まれます。公開環境へのデプロイは対象外です。
 
-設計は[Specification](specs/001-experiment-evolution/spec.md)、[Plan](specs/001-experiment-evolution/plan.md)、進捗は[Tasks](specs/001-experiment-evolution/tasks.md)を参照してください。[Quickstart](specs/001-experiment-evolution/quickstart.md)は完成後に向けた検証シナリオを含みます。現段階の起動手順は以下です。
+設計は[Specification](specs/001-experiment-evolution/spec.md)、[Plan](specs/001-experiment-evolution/plan.md)、進捗は[Tasks](specs/001-experiment-evolution/tasks.md)を参照してください。最短の実行・検証手順は[Quickstart](specs/001-experiment-evolution/quickstart.md)です。以下は初回導入時にも使える詳細な手順です。
 
 ## 前準備A. Macにツールを導入する
 
@@ -265,7 +265,7 @@ uvは`pyproject.toml`と`uv.lock`から`backend/.venv`を準備します。`--lo
 
 > 用語：環境変数はプログラムへ外から渡す名前付き設定値です。`.env.example`はその記入例で、ファイルを置くだけではOSの環境変数になりません。読み取る処理が必要です。
 
-現在は`.env`の読み込みが未実装なので、以下のコピーは後続の設定実装時に行う参考手順です。今は実行せず、手順4へ進みます。必要になった時はターミナルAのリポジトリルートで入力します。
+アプリケーションは起動時に環境変数を検証します。通常利用用のMySQLとMLflowの接続情報を、Git管理しない`backend/.env`へ設定します。テスト専用URLは`backend/.env.example`の固定ローカル値を使います。
 
 ```bash
 cp -n backend/.env.example backend/.env
@@ -281,7 +281,19 @@ cp -n backend/.env.example backend/.env
 
 `.env`はGit管理対象外です。テスト用Composeの固定認証値はローカルテスト専用で、通常環境に流用しません。
 
-現在の`backend/main.py`はこれらの設定を読み込まず、DB・MLflowへ接続しません。設定読み込みと検証はT008・T009、DBテストでの接続先選択はT010以降で実装します。通常DBとMLflowの構築はこのSetup手順に含みません。
+`MONDEL_DATABASE_URL`は通常アプリ用DB、`MONDEL_TEST_DATABASE_URL`は自動テストだけが使うDB、`MLFLOW_TRACKING_URI`はRun情報を読む外部MLflow serverのURLです。通常DBとMLflow serverの認証情報は組織・環境ごとに異なるため、サンプル値のままでは起動できません。
+
+### 通常アプリ用DBへマイグレーションを適用する
+
+操作場所：ターミナルA、リポジトリルート。先に通常用MySQLの`mondel`データベースを、`backend/.env`に書いた接続先で作成しておきます。
+
+```bash
+cd backend
+uv run --env-file .env alembic -x database=application upgrade head
+cd ..
+```
+
+`alembic`はDB構造の変更履歴を適用する道具、`-x database=application`は通常用URLを明示選択する指定、`upgrade head`は最新のマイグレーションまでテーブルと制約を作成する指定です。自動テストは別の`mondel_test` DBを使い、そのマイグレーションはテストfixtureが適用します。テスト用DBへCLIで適用する場合だけ、`database=application`を`database=test`に置き換えます。
 
 ## 4. テスト専用MySQLを起動する
 
@@ -348,12 +360,12 @@ SQLの`SELECT`は値を取得する命令、`1`は固定値、`DATABASE()`は接
 
 ```bash
 cd backend
-uv run fastapi dev main.py --host 127.0.0.1 --port 8000
+uv run --env-file .env fastapi run main.py --host 127.0.0.1 --port 8000
 ```
 
-`uv run`はPython環境の選択、`fastapi`は実行するCLI、`dev`は開発用起動、`main.py`は読み込むファイル、`--host`は待ち受けるアドレス、`--port`は待ち受けるポートの指定です。このコマンドは終了せず動き続けます。以後、ターミナルBへ別のコマンドを入力しません。
+`uv run`はPython環境の選択、`--env-file .env`はGit管理しない接続設定の読み込み、`fastapi`は実行するCLI、`run`はサーバー起動、`main.py`は読み込むファイル、`--host`は待ち受けるアドレス、`--port`は待ち受けるポートの指定です。このコマンドは終了せず動き続けます。以後、ターミナルBへ別のコマンドを入力しません。
 
-`main.py`の`app`が読み込まれます。`http://127.0.0.1:8000/`を開くと`root()`が呼ばれ、`{"message":"Hello World"}`が返ります。APIドキュメントは`http://127.0.0.1:8000/docs`です。
+`main.py`の`app`が読み込まれます。APIドキュメントは`http://127.0.0.1:8000/docs`です。通常の利用者画面はViteのURLから開き、APIを直接8000番へ呼びません。
 
 確認する場所：ブラウザのアドレスバーへ上のURLを入力します。JSONが表示されれば成功です。
 
@@ -374,7 +386,7 @@ Viteが表示したLocal URL（通常`http://localhost:5173/`）を開き、`Mon
 
 ### API通信の経路
 
-ここは仕組みを読むための説明です。以下のJavaScriptはターミナルへ入力しません。製品APIと呼び出し処理は後続タスクで実装するため、現段階では画面からこの通信は発生しません。
+ここは仕組みを読むための説明です。以下のJavaScriptはターミナルへ入力しません。実際のフロントエンドも同じく相対`/api/v1/...` URLを使い、画面操作でこの通信が発生します。
 
 #### URLの「住所」と「窓口」を分ける
 
@@ -489,7 +501,7 @@ server: {
 
 ローカルMVPはVite経由で同じoriginへ送る設計なので、FastAPIへCORS設定を追加しません。ViteからFastAPIへの中継はブラウザ内の通信処理ではありません。
 
-現在は製品APIが未実装なので、このパスを呼ぶとFastAPIは404（該当する窓口がない）を返します。機能検証は後続タスクで行います。また、Viteの開発用proxyは`dist/`に含まれないため、本番公開時の中継方法は別途必要です。
+現在のFastAPIにはこのAPI窓口が実装されています。Viteの開発用proxyは`dist/`に含まれないため、本番公開時にはリバースプロキシなど別の中継設定が必要です。公開環境の構築はこのローカルMVPの対象外です。
 
 ## 7. テストとビルドを確認する
 
@@ -497,28 +509,31 @@ server: {
 
 ```bash
 cd backend
-uv run pytest tests/unit/test_test_environment.py
-uv run ruff check tests/unit/test_test_environment.py
+uv run --env-file .env.example pytest
+uv run ruff check .
 cd ../frontend
-npm test -- --run src/test/setup.test.tsx
+npm test -- --run
 npm run build
+npx playwright install chromium
+npm run test:e2e
 cd ..
 ```
 
 | コマンド | 処理と確認範囲 |
 |---|---|
-| pytest | `pytest.ini`を読み、`.env.example`の通常DB・テストDBのURL記載を検証。実際の環境変数選択やDB接続は検証しない |
-| Ruff | Pythonテストの静的検査 |
-| Vitest | `vitest.config.ts` → jsdom → `src/test/setup.ts` → `setup.test.tsx` → App描画と文字確認。終了後にcleanup |
+| pytest | 単体・統合・契約・マイグレーションを、専用の`mondel_test` DBで検証する |
+| Ruff | `backend/`全体のPython静的検査 |
+| Vitest | Reactコンポーネント・API呼び出しをNode.js上のブラウザ風環境で検証する |
 | build | `tsc --noEmit`の型検査 → `vite build` → `dist/`へブラウザ配信用ファイルを生成 |
+| Playwright | Chromiumを起動し、作成・Run紐付けの重要画面フローを検証する |
 
 `npm test`は`package.json`の`"test": "vitest"`を実行し、`--`より後の引数をVitestへ渡します。`--run`は変更監視をせず1回で終了する指定です。
 
 `pytest`の後のパスは実行するテストファイルです。`ruff check`は静的検査の命令で、その後のパスが検査対象です。`npm run build`の`build`もscripts内の名前で、現在は`tsc --noEmit && vite build`を実行します。`tsc`はTypeScriptの検査、`--noEmit`はファイルを生成しない指定、`&&`は左の成功時だけ右へ進む記号です。`vite build`が配信用ファイルを生成します。
 
-成功条件：pytestが`1 passed`、Ruffが`All checks passed!`、Vitestが`Tests 1 passed`、ビルドが`built`を表示すること。最後の`cd ..`でターミナルAはリポジトリルートへ戻ります。
+成功条件：すべてのpytest/Vitest/Playwright testがpassed、Ruffが`All checks passed!`、ビルドが`built`を表示すること。Playwrightで失敗した場合は`frontend/test-results/`とtraceを確認します。最後の`cd ..`でターミナルAはリポジトリルートへ戻ります。
 
-現在のsmoke testはバックエンド・フロントエンド各1件です。ブラウザの実表示、DB接続、ビルド成功はそれぞれ別の確認です。ビルド成功は公開完了や製品機能の動作保証を意味しません。生成した`dist/`はGit管理対象外です。
+ブラウザの実表示、DB接続、ビルド成功はそれぞれ別の確認です。ビルド成功は公開完了や製品機能全体の動作保証を意味しません。生成した`dist/`はGit管理対象外です。
 
 > 用語：smoke testは基本動作の短い確認、jsdomはNode.js上でDOMを再現するライブラリです。Vitestはテストを進行し、React Testing Libraryは描画・検索を補助します。ビルドはソースを配布可能なファイルへ変換・整理する工程、デプロイはそれを配信先へ配置する工程です。
 
@@ -556,6 +571,9 @@ docker compose -f docker-compose.test.yml ps -a
 - `3307`が使用済み：既存のコンテナ・プロセスを確認する。ポートを変更する場合はCompose・接続URL・検証の期待値を揃える。
 - `uv`や`npm`が見つからない：インストール状態と、そのターミナルのPATHを確認する。
 - 初期化に失敗する：`docker compose -f docker-compose.test.yml logs mysql-test`で原因を確認する。
+- `alembic upgrade`に失敗する：`backend/.env`の`MONDEL_DATABASE_URL`、通常用MySQLの起動、対象DBの作成を確認する。テスト用URLを通常用に指定しない。
+- FastAPIが起動しない：`backend/.env`の3設定値にサンプルの`USERNAME:PASSWORD`が残っていないか、MLflow serverへ到達できるかを確認する。
+- Playwrightがブラウザを見つけられない：`cd frontend && npx playwright install chromium`を実行して、ロック済みの`@playwright/test`に対応するChromiumを再導入する。
 
 ## 付録：ツールのつながりと以前の学習メモ
 

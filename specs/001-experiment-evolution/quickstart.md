@@ -2,17 +2,68 @@
 
 ## Prerequisites
 
-- Python 3.12+, `uv`, Node.js LTS with `npm`, Docker-compatible container runtime, MySQL 8.0+, and a reachable MLflow Tracking Server.
-- Configure backend environment variables for a MySQL connection and MLflow tracking URI. Do not commit credentials.
-- Prepare MLflow Runs that include Parameters, an `accuracy` history with other Metrics logged at the same steps, and dataset input metadata.
+- Python 3.12+, `uv`, Node.js 24 with `npm`, and Docker Desktop.
+- A normal-use MySQL database and reachable MLflow Tracking Server for manual application use. Their credentials belong only in `backend/.env`; do not commit them.
+- For manual acceptance, prepare MLflow Runs with Parameters, an `accuracy` history, other Metrics at the same steps, and Dataset Input metadata.
 
 ## Setup and run
 
-1. From `backend/`, run `uv sync`, apply Alembic migrations, then start FastAPI at `http://127.0.0.1:8000` with the project command defined in `pyproject.toml`.
-2. From `frontend/`, run `npm ci` and `npm run dev`. Vite accepts the browser's relative `/api/v1/...` requests and proxies the `/api` prefix to the FastAPI process; the browser does not call port 8000 directly.
-3. Open the frontend URL printed by Vite. During US1, use the create and detail routes directly. After US2, also confirm the empty Evolution Step list loads through the proxied API.
+All commands below start at the repository root unless a step says otherwise.
 
-Before implementation, these commands are expected to become the reproducible project entry points. Their exact environment variable names and scripts are assigned during task generation.
+1. Install locked dependencies and start the dedicated automated-test DB.
+
+   ```bash
+   cd backend && uv sync --locked --all-groups && cd ..
+   cd frontend && npm ci && npx playwright install chromium && cd ..
+   docker compose -f docker-compose.test.yml up -d --wait --wait-timeout 180
+   ```
+
+   `mondel_test` is only for automated tests and listens at `127.0.0.1:3307`. Its local test-only credentials are in `backend/.env.example` and in `docker-compose.test.yml`.
+
+2. Create `backend/.env` from the example, replace the normal database username/password and the MLflow URL with real values, then apply the schema to the normal-use database.
+
+   ```bash
+   cp -n backend/.env.example backend/.env
+   cd backend && uv run --env-file .env alembic -x database=application upgrade head && cd ..
+   ```
+
+   `-x database=application` selects `MONDEL_DATABASE_URL`; it prevents accidentally applying the application schema to an unspecified connection. The test suite manages its own test schema.
+
+3. In terminal A, start FastAPI. In terminal B, start Vite.
+
+   ```bash
+   # terminal A
+   cd backend && uv run --env-file .env fastapi run main.py --host 127.0.0.1 --port 8000
+
+   # terminal B
+   cd frontend && npm run dev -- --host 127.0.0.1 --port 5173
+   ```
+
+4. Open `http://127.0.0.1:5173`. Browser code sends relative `/api/v1/...` requests to Vite on port 5173. Vite's proxy sends the same method, path, and body to FastAPI on `127.0.0.1:8000`; the browser does not call port 8000 directly.
+
+## Automated verification
+
+Run the following after the test DB becomes healthy. These commands do not need normal MySQL or a live MLflow server because tests use the dedicated DB and MLflow fixtures.
+
+```bash
+cd backend
+uv run --env-file .env.example pytest
+uv run ruff check .
+cd ../frontend
+npm test -- --run
+npm run build
+npm run test:e2e
+```
+
+The E2E command starts configured FastAPI and Vite servers. It uses deterministic browser fixtures for the MLflow-backed create-and-attach flow; a pass verifies browser form behavior and the relative Vite-origin request path, not a live MLflow account.
+
+## Failure triage
+
+- Test DB is not healthy: run `docker compose -f docker-compose.test.yml ps` and `docker compose -f docker-compose.test.yml logs mysql-test`.
+- Migration or API startup fails: inspect non-secret `backend/.env` values. `MONDEL_DATABASE_URL` must name an existing normal-use database, while `MLFLOW_TRACKING_URI` must reach a Tracking Server.
+- Vite cannot reach the API: confirm FastAPI is listening at `http://127.0.0.1:8000/docs`, then confirm Vite is listening at `http://127.0.0.1:5173`.
+- Chromium is missing: rerun `cd frontend && npx playwright install chromium` after `npm ci`.
+- E2E fails: retain the generated Playwright trace and screenshot under `frontend/test-results/` before rerunning the case.
 
 ## Validation scenarios
 
@@ -30,11 +81,25 @@ US1 must demonstrate single-Run saved-detail and best-step Metric viewing withou
 10. **Run candidate paging**: Prepare more than 20 active-lifecycle MLflow Runs, one deleted-lifecycle Run, duplicate names, and Runs in different MLflow Experiments. Request the first candidate page and confirm the deleted Run is absent, the remaining candidates use newest-first stable ordering, 20 items, and a non-null `nextPageToken`. Verify the picker displays every candidate's Run ID/name, MLflow Experiment ID/name, execution status, and start/end times, using explicit unset states for nullable fields. Request the next page with the same search term and confirm no duplicate boundary item. Verify case-insensitive Run-name filtering and `nextPageToken: null` on the final page.
 11. **Evolution Step list paging**: Prepare more than 20 Evolution Steps, including multiple rows with the same `created_at`. Confirm the first response returns at most 20 items ordered by `created_at DESC, id DESC` and includes `nextPageToken` only when more rows exist. Insert a newer Evolution Step, request the continuation page, and verify the new row is not mixed into the existing traversal and no boundary item is duplicated. Reload without a token and verify the new row appears on the first page. Expect `422` for a malformed token. Verify each visible item includes ID, purpose, hypothesis, parent/result Run summaries or unset states, created/updated times, comparison availability/reason, Parameter change count, best accuracies/delta, and Dataset change status; distinguish unchanged from unavailable.
 
-## Automated verification
+## Timed manual acceptance procedure
 
-- Backend: `uv run pytest` for unit, integration, MLflow-gateway mock, migration, and OpenAPI contract suites. Integration tests use an explicitly configured dedicated MySQL test database; Testcontainers is not required.
-- Frontend: `npm test -- --run` performs one-shot verification without watch mode for Run-candidate fields, form behavior, local detail and all captured Parameters/Dataset Inputs, lazy best-step Metrics, synchronization request flow, list fields, errors, and comparison/Lineage display tests.
-- End-to-end setup: After installing the locked npm dependencies, run `npx playwright install chromium` on each new development or CI environment to install the browser binary matching the locked `@playwright/test` version.
-- End-to-end: `npm run test:e2e` maps to `playwright test` and, after frontend/backend integration, runs one Chromium test for the critical create-and-attach journey. Playwright starts and waits for the configured FastAPI and Vite web servers, and the browser reaches FastAPI through Vite's relative `/api` proxy rather than a direct backend origin. The remaining validation scenarios are covered by backend integration and frontend component tests. Preserve traces and screenshots for failures.
+Record every run in `validation-results.md` with the commit ID from `git rev-parse HEAD`, date, browser, normal-use MySQL database name, MLflow fixture/run IDs, start condition, end condition, elapsed time, result, and evidence. Do not record secrets.
+
+1. **SC-001 (within 3 minutes):** begin when the empty create form is displayed. Choose distinct prepared parent/result Runs, enter non-empty purpose and hypothesis, save, and end when the resulting detail displays the selected result Run.
+2. **SC-002 (within 1 minute):** begin when a prepared captured-Step detail page opens. End when Parameter differences, best accuracy, and accuracy delta are identified from the Comparison panel.
+3. **SC-003 (within 1 minute):** begin when a prepared multi-generation Step detail page opens. End when every expected ancestor, descendant, and their order are identified in the Lineage panel.
+4. **SC-004 (100% agreement):** create the prepared records, stop FastAPI and Vite with `Ctrl+C`, restart both using the commands above without resetting MySQL, then compare all expected detail fields and reconstructed Lineage with the fixture worksheet. Record the matched count and expected count; pass only when they are equal.
+
+For a failed criterion, preserve the Playwright trace/screenshot when available or browser/API diagnostic information, write the observed state and time, and mark the criterion failed rather than altering expected values.
+
+## Stop the local test DB
+
+After verification, stop (rather than delete) the dedicated test DB:
+
+```bash
+docker compose -f docker-compose.test.yml stop
+```
+
+`stop` keeps the container available for the next `up`; `down` removes the container. Do not run `down -v` unless intentionally discarding test data.
 
 See [data-model.md](data-model.md) for persistence and integrity rules, and [contracts/openapi.yaml](contracts/openapi.yaml) for HTTP responses and error semantics.
