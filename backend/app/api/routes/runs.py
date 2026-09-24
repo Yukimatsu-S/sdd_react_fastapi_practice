@@ -46,7 +46,11 @@ def get_mlflow_client() -> MlflowClient:
 MlflowClientDependency = Annotated[MlflowClient, Depends(get_mlflow_client)]
 
 
-@router.get("", response_model=RunCandidatePageResponse)
+@router.get(
+    "",
+    response_model=RunCandidatePageResponse,
+    responses={502: {"description": "MLflow Run search was unavailable."}},
+)
 def search_runs(
     query: str | None = Query(default=None, max_length=255),
     page_token: str | None = Query(default=None, alias="pageToken"),
@@ -83,7 +87,14 @@ def search_runs(
     )
 
 
-@router.post("/{runId}/sync", response_model=RunSyncResponse)
+@router.post(
+    "/{runId}/sync",
+    response_model=RunSyncResponse,
+    responses={
+        404: {"description": "Run was not found."},
+        502: {"description": "MLflow Run synchronization was unavailable."},
+    },
+)
 def sync_run(
     run_id: Annotated[str, Path(alias="runId", max_length=64, pattern=r"^\S+$")],
     session: SessionDependency,
@@ -113,7 +124,11 @@ def sync_run(
         raise ApiError(502, "mlflow_unavailable", "MLflow Run could not be loaded.") from error
 
 
-@router.get("/{runId}/best-step-metrics", response_model=BestStepMetricsResponse)
+@router.get(
+    "/{runId}/best-step-metrics",
+    response_model=BestStepMetricsResponse,
+    responses={404: {"description": "Run was not found."}},
+)
 def get_best_step_metrics(
     run_id: Annotated[str, Path(alias="runId", max_length=64, pattern=r"^\S+$")],
     session: SessionDependency,

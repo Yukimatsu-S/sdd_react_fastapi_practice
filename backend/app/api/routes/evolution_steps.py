@@ -113,7 +113,15 @@ def list_evolution_steps(
         raise ApiError(422, "validation_error", str(error)) from error
 
 
-@router.post("", response_model=EvolutionStepDetailResponse, status_code=201)
+@router.post(
+    "",
+    response_model=EvolutionStepDetailResponse,
+    status_code=201,
+    responses={
+        409: {"description": "Run links conflict with the current Lineage."},
+        502: {"description": "MLflow Run data was unavailable."},
+    },
+)
 def create_evolution_step(
     request: EvolutionStepCreateRequest,
     session: SessionDependency,
@@ -149,7 +157,11 @@ def create_evolution_step(
         raise ApiError(422, "validation_error", str(error)) from error
 
 
-@router.get("/{evolutionStepId}/comparison", response_model=ComparisonResponse)
+@router.get(
+    "/{evolutionStepId}/comparison",
+    response_model=ComparisonResponse,
+    responses={404: {"description": "Evolution Step was not found."}},
+)
 def get_evolution_step_comparison(
     evolution_step_id: Annotated[int, Path(alias="evolutionStepId", ge=1)],
     session: SessionDependency,
@@ -196,7 +208,11 @@ def get_evolution_step_lineage(
         raise ApiError(404, "not_found", str(error)) from error
 
 
-@router.get("/{evolutionStepId}", response_model=EvolutionStepDetailResponse)
+@router.get(
+    "/{evolutionStepId}",
+    response_model=EvolutionStepDetailResponse,
+    responses={404: {"description": "Evolution Step was not found."}},
+)
 def get_evolution_step(
     evolution_step_id: Annotated[int, Path(alias="evolutionStepId", ge=1)],
     session: SessionDependency,
@@ -218,7 +234,15 @@ def get_evolution_step(
         raise ApiError(404, "not_found", str(error)) from error
 
 
-@router.patch("/{evolutionStepId}", response_model=EvolutionStepDetailResponse)
+@router.patch(
+    "/{evolutionStepId}",
+    response_model=EvolutionStepDetailResponse,
+    responses={
+        404: {"description": "Evolution Step was not found."},
+        409: {"description": "Run links conflict with the current Lineage."},
+        502: {"description": "MLflow Run data was unavailable."},
+    },
+)
 def patch_evolution_step(
     request: EvolutionStepPatchRequest,
     evolution_step_id: Annotated[int, Path(alias="evolutionStepId", ge=1)],
