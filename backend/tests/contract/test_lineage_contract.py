@@ -2,10 +2,10 @@
 
 import inspect
 
-from app.api.schemas.lineage import LineageResponse, LineageStepResponse
 from fastapi.testclient import TestClient
 
 from app.api.routes.evolution_steps import get_evolution_step_lineage
+from app.api.schemas.lineage import LineageResponse, LineageStepResponse
 
 
 def test_lineage_handler_is_synchronous() -> None:
@@ -34,6 +34,7 @@ def test_lineage_schema_keeps_distances_parent_step_and_external_boundary() -> N
             distance_from_selected=0,
             parent_run={
                 "run_id": "run-1",
+                "mlflow_experiment_id": "experiment-1",
                 "run_name": "baseline",
                 "current_status": "FINISHED",
                 "started_at": "2026-09-24T10:00:00Z",
@@ -50,6 +51,7 @@ def test_lineage_schema_keeps_distances_parent_step_and_external_boundary() -> N
                 distance_from_selected=1,
                 parent_run={
                     "run_id": "run-external",
+                    "mlflow_experiment_id": None,
                     "run_name": None,
                     "current_status": "FINISHED",
                     "started_at": None,
