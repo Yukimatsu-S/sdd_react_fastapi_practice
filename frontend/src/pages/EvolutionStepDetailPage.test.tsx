@@ -3,9 +3,10 @@ import { describe, expect, test, vi } from "vitest";
 
 import { EvolutionStepDetailPage } from "./EvolutionStepDetailPage";
 
-const { getComparison, getEvolutionStep, getBestStepMetrics, syncRun } = vi.hoisted(() => ({
+const { getComparison, getEvolutionStep, getLineage, getBestStepMetrics, syncRun } = vi.hoisted(() => ({
   getComparison: vi.fn(),
   getEvolutionStep: vi.fn(),
+  getLineage: vi.fn(),
   getBestStepMetrics: vi.fn(),
   syncRun: vi.fn(),
 }));
@@ -14,6 +15,7 @@ vi.mock("../api/evolutionSteps", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../api/evolutionSteps")>()),
   getComparison,
   getEvolutionStep,
+  getLineage,
 }));
 vi.mock("../api/runs", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../api/runs")>()),
@@ -100,5 +102,46 @@ describe("EvolutionStepDetailPage", () => {
     expect(await screen.findByText("Compare captured Runs")).toBeInTheDocument();
     expect(await screen.findByText("Comparison could not be loaded.")).toBeInTheDocument();
     expect(getComparison).toHaveBeenCalledWith(13);
+  });
+
+  test("reloads current Lineage when returning to a saved Step", async () => {
+    getEvolutionStep.mockResolvedValue({
+      id: 14,
+      purpose: "Refresh current Lineage",
+      hypothesis: "The saved links are read again.",
+      changeDescription: null,
+      parentRun: null,
+      resultRun: null,
+      createdAt: "2026-09-24T10:00:00Z",
+      updatedAt: "2026-09-24T10:00:00Z",
+      history: [],
+    });
+    getComparison.mockResolvedValue({
+      status: "unavailable",
+      unavailableReason: "parent_run_missing",
+      parameters: [],
+      accuracy: {
+        status: "unavailable",
+        unavailableReason: "comparison_unavailable",
+        parentBest: null,
+        resultBest: null,
+        delta: null,
+      },
+      datasets: {
+        status: "unavailable",
+        unavailableReason: "comparison_unavailable",
+        differences: [],
+      },
+    });
+    getLineage.mockResolvedValue({ selected: null, ancestors: [], descendants: [] });
+
+    const { unmount } = render(<EvolutionStepDetailPage evolutionStepId={14} />);
+    expect(await screen.findByText("Refresh current Lineage")).toBeInTheDocument();
+    unmount();
+    render(<EvolutionStepDetailPage evolutionStepId={14} />);
+
+    expect(await screen.findByText("Refresh current Lineage")).toBeInTheDocument();
+    expect(getLineage).toHaveBeenCalledTimes(2);
+    expect(getLineage).toHaveBeenLastCalledWith(14);
   });
 });
