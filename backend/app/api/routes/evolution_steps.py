@@ -32,6 +32,7 @@ from app.api.schemas.evolution_steps import (
     RunSnapshotResponse,
     RunSummaryResponse,
 )
+from app.api.schemas.lineage import LineageResponse, LineageStepResponse
 from app.config import load_settings
 from app.domain.comparison import Comparison
 from app.domain.lineage import LineageCycleError, ResultRunConflictError
@@ -46,6 +47,7 @@ from app.infrastructure.run_repository import RunRepository, RunSnapshotRecord
 from app.services.comparison_service import ComparisonService
 from app.services.evolution_step_list_service import EvolutionStepListService
 from app.services.evolution_step_service import EvolutionStepService
+from app.services.lineage_service import Lineage, LineageService, LineageStep
 
 router = APIRouter(prefix="/evolution-steps", tags=["evolution-steps"])
 SessionDependency = Annotated[Session, Depends(get_request_session)]
@@ -164,6 +166,32 @@ def get_evolution_step_comparison(
     try:
         comparison = ComparisonService(session.connection()).get(evolution_step_id)
         return _comparison_response(comparison)
+    except LookupError as error:
+        raise ApiError(404, "not_found", str(error)) from error
+
+
+@router.get(
+    "/{evolutionStepId}/lineage",
+    response_model=LineageResponse,
+    responses={404: {"description": "Evolution Step was not found."}},
+)
+def get_evolution_step_lineage(
+    evolution_step_id: Annotated[int, Path(alias="evolutionStepId", ge=1)],
+    session: SessionDependency,
+) -> LineageResponse:
+    """Return current ancestors and descendants centered on one saved Step.
+
+    Args:
+        evolution_step_id: Positive local Evolution Step identifier from the URL.
+        session: Request-scoped database Session.
+
+    Returns:
+        LineageResponse: Ordered local Lineage with current Run summary metadata.
+    """
+    try:
+        connection = session.connection()
+        lineage = LineageService(connection).get(evolution_step_id)
+        return _lineage_response(lineage, RunRepository(connection))
     except LookupError as error:
         raise ApiError(404, "not_found", str(error)) from error
 
@@ -306,6 +334,51 @@ def _comparison_response(comparison: Comparison) -> ComparisonResponse:
                 for item in comparison.datasets.differences
             ],
         ),
+    )
+
+
+def _lineage_response(
+    lineage: Lineage,
+    runs: RunRepository,
+) -> LineageResponse:
+    """Map selected-centered Lineage records to the public response model.
+
+    Args:
+        lineage: Current local graph positions from the Lineage service.
+        runs: Repository used to add Snapshot state to each Run summary.
+
+    Returns:
+        LineageResponse: CamelCase-ready selected, ancestor, and descendant data.
+    """
+    return LineageResponse(
+        selected=_lineage_step_response(lineage.selected, runs),
+        ancestors=[_lineage_step_response(item, runs) for item in lineage.ancestors],
+        descendants=[_lineage_step_response(item, runs) for item in lineage.descendants],
+    )
+
+
+def _lineage_step_response(
+    item: LineageStep,
+    runs: RunRepository,
+) -> LineageStepResponse:
+    """Map one current graph position to a JSON-safe Lineage Step.
+
+    Args:
+        item: Saved Step, graph position, and current Run reference data.
+        runs: Repository used to map Run IDs to summaries with Snapshot state.
+
+    Returns:
+        LineageStepResponse: Public Step text, links, and distance values.
+    """
+    step = item.evolution_step
+    return LineageStepResponse(
+        id=step.id,
+        purpose=step.purpose,
+        hypothesis=step.hypothesis,
+        parent_evolution_step_id=item.parent_evolution_step_id,
+        distance_from_selected=item.distance_from_selected,
+        parent_run=_run_summary_response(runs, step.parent_run_id),
+        result_run=_run_summary_response(runs, step.result_run_id),
     )
 
 
