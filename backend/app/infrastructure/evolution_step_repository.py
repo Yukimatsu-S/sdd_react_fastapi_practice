@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from sqlalchemy import and_, or_, select, update
 from sqlalchemy.engine import Connection
 
+from app.domain.lineage import LineageEdge
 from app.domain.pagination import decode_cursor, encode_cursor
 from app.infrastructure.models import (
     evolution_step,
@@ -232,6 +233,33 @@ class EvolutionStepRepository:
             statement = statement.where(evolution_step.c.id != excluding_step_id)
         rows = self._connection.execute(statement)
         return tuple((str(parent), str(result)) for parent, result in rows)
+
+    def current_lineage_edges(self) -> tuple[LineageEdge, ...]:
+        """Return every current Step link needed for ancestor and descendant reads.
+
+        History rows are intentionally excluded: Lineage represents the links
+        currently saved on each Evolution Step, not links that were valid before
+        an edit. A single ordered read gives the service enough information to
+        trace both directions without duplicating graph query rules.
+
+        Returns:
+            tuple[LineageEdge, ...]: Current links in ascending Evolution Step ID order.
+        """
+        rows = self._connection.execute(
+            select(
+                evolution_step.c.id,
+                evolution_step.c.parent_run_id,
+                evolution_step.c.result_run_id,
+            ).order_by(evolution_step.c.id.asc()),
+        ).mappings()
+        return tuple(
+            LineageEdge(
+                evolution_step_id=int(row["id"]),
+                parent_run_id=row["parent_run_id"],
+                result_run_id=row["result_run_id"],
+            )
+            for row in rows
+        )
 
     def claimed_result_run_ids(self, excluding_step_id: int | None = None) -> set[str]:
         """Return every Run currently used as an Evolution Step result.
