@@ -1,5 +1,5 @@
 import { render, screen } from "@testing-library/react";
-import { describe, expect, test, vi } from "vitest";
+import { beforeEach, describe, expect, test, vi } from "vitest";
 
 import { EvolutionStepDetailPage } from "./EvolutionStepDetailPage";
 
@@ -24,6 +24,23 @@ vi.mock("../api/runs", async (importOriginal) => ({
 }));
 
 describe("EvolutionStepDetailPage", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getLineage.mockResolvedValue({
+      selected: {
+        id: 0,
+        purpose: "Default Lineage",
+        hypothesis: "A test default.",
+        parentEvolutionStepId: null,
+        distanceFromSelected: 0,
+        parentRun: null,
+        resultRun: null,
+      },
+      ancestors: [],
+      descendants: [],
+    });
+  });
+
   test("shows local detail before retaining it after a synchronization failure", async () => {
     getEvolutionStep.mockResolvedValue({
       id: 12,
@@ -133,8 +150,6 @@ describe("EvolutionStepDetailPage", () => {
         differences: [],
       },
     });
-    getLineage.mockResolvedValue({ selected: null, ancestors: [], descendants: [] });
-
     const { unmount } = render(<EvolutionStepDetailPage evolutionStepId={14} />);
     expect(await screen.findByText("Refresh current Lineage")).toBeInTheDocument();
     unmount();

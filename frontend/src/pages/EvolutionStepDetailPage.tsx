@@ -5,13 +5,16 @@ import { useEffect, useState } from "react";
 import {
   getComparison,
   getEvolutionStep,
+  getLineage,
   type Comparison,
   type EvolutionStepDetail as EvolutionStepDetailData,
+  type Lineage,
 } from "../api/evolutionSteps";
 import { getBestStepMetrics, syncRun, type BestStepMetricsResult } from "../api/runs";
 import { BestStepMetrics } from "../features/evolution-steps/BestStepMetrics";
 import { ComparisonPanel } from "../features/evolution-steps/ComparisonPanel";
 import { EvolutionStepDetail } from "../features/evolution-steps/EvolutionStepDetail";
+import { LineagePanel } from "../features/evolution-steps/LineagePanel";
 import { RunSyncStatus } from "../features/evolution-steps/RunSyncStatus";
 
 type EvolutionStepDetailPageProps = {
@@ -31,6 +34,8 @@ export function EvolutionStepDetailPage({
   const [metrics, setMetrics] = useState<BestStepMetricsResult[]>([]);
   const [comparison, setComparison] = useState<Comparison | null>(null);
   const [comparisonError, setComparisonError] = useState<string | null>(null);
+  const [lineage, setLineage] = useState<Lineage | null>(null);
+  const [lineageError, setLineageError] = useState<string | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -47,6 +52,8 @@ export function EvolutionStepDetailPage({
         setDetail(initial);
         setComparison(null);
         setComparisonError(null);
+        setLineage(null);
+        setLineageError(null);
         const linkedRunIds = [initial.parentRun, initial.resultRun]
           .flatMap((linkedRun) => (linkedRun === null ? [] : [linkedRun.reference.runId]));
         const uniqueRunIds = [...new Set(linkedRunIds)];
@@ -86,6 +93,17 @@ export function EvolutionStepDetailPage({
             setComparisonError("Comparison could not be loaded.");
           }
         }
+
+        try {
+          const loadedLineage = await getLineage(evolutionStepId);
+          if (active) {
+            setLineage(loadedLineage);
+          }
+        } catch {
+          if (active) {
+            setLineageError("Lineage could not be loaded.");
+          }
+        }
       } catch {
         if (active) {
           setError("Evolution Step detail could not be loaded.");
@@ -112,6 +130,8 @@ export function EvolutionStepDetailPage({
       <EvolutionStepDetail detail={detail} />
       {comparisonError === null ? null : <p role="alert">{comparisonError}</p>}
       {comparison === null ? null : <ComparisonPanel comparison={comparison} />}
+      {lineageError === null ? null : <p role="alert">{lineageError}</p>}
+      {lineage === null ? null : <LineagePanel lineage={lineage} />}
       {metrics.map((result) => (
         <BestStepMetrics key={result.runId} result={result} />
       ))}
