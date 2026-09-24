@@ -16,5 +16,9 @@ dist/
 coverage/
 *.log
 
+# Playwright reports and failure artifacts
+playwright-report/
+test-results/
+
 # Local database recovery backups (may contain private data)
 backend/.local/
