@@ -4,6 +4,7 @@ import { ApiClientError } from "./client";
 import {
   createEvolutionStep,
   getEvolutionStep,
+  getLineage,
   patchEvolutionStep,
   listEvolutionSteps,
 } from "./evolutionSteps";
@@ -80,6 +81,33 @@ describe("getEvolutionStep", () => {
     await getEvolutionStep(12);
 
     expect(fetchMock).toHaveBeenCalledWith("/api/v1/evolution-steps/12", {});
+  });
+});
+
+describe("getLineage", () => {
+  test("requests the documented URL without changing ordered arrays or null boundaries", async () => {
+    const lineage = {
+      selected: {
+        id: 2,
+        purpose: "Selected",
+        hypothesis: "Current links are shown.",
+        parentEvolutionStepId: 1,
+        distanceFromSelected: 0,
+        parentRun: null,
+        resultRun: null,
+      },
+      ancestors: [],
+      descendants: [],
+    };
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify(lineage), { status: 200 }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await getLineage(2);
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/v1/evolution-steps/2/lineage", {});
+    expect(response).toEqual(lineage);
   });
 });
 

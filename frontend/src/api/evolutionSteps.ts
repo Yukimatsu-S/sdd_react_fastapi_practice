@@ -143,6 +143,22 @@ export type Comparison = {
   datasets: DatasetComparison;
 };
 
+export type LineageStep = {
+  id: number;
+  purpose: string;
+  hypothesis: string;
+  parentEvolutionStepId: number | null;
+  distanceFromSelected: number;
+  parentRun: RunSummary | null;
+  resultRun: RunSummary | null;
+};
+
+export type Lineage = {
+  selected: LineageStep;
+  ancestors: LineageStep[];
+  descendants: LineageStep[];
+};
+
 /**
  * Create an Evolution Step with the selected optional Run links.
  *
@@ -177,6 +193,16 @@ export async function getEvolutionStep(evolutionStepId: number): Promise<Evoluti
  */
 export async function getComparison(evolutionStepId: number): Promise<Comparison> {
   return requestJson<Comparison>(`/evolution-steps/${evolutionStepId}/comparison`);
+}
+
+/**
+ * Load the current-link ancestors and descendants for one saved Evolution Step.
+ *
+ * @param evolutionStepId - Positive local Evolution Step identifier.
+ * @returns Selected Step with server-ordered ancestor and descendant arrays.
+ */
+export async function getLineage(evolutionStepId: number): Promise<Lineage> {
+  return requestJson<Lineage>(`/evolution-steps/${evolutionStepId}/lineage`);
 }
 
 /**
